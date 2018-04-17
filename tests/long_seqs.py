@@ -3,7 +3,7 @@ import os
 import tensorflow as tf
 import numpy as np
 import sys
-sys.path.append(os.path.abspath("../"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
 from layers_new import linear_surrogate_lstm
 
 INPUT_DIM = 128
