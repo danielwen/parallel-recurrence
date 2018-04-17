@@ -37,6 +37,8 @@ def gen_data(batch_size, seq_length):
     batch_X = np.array(data_X)
     batch_y = np.array(data_y)
 
+    batch_X = np.swapaxes(batch_X, 0, 1)
+
     return batch_X, batch_y
 
 def ls_lstm(seq_len, X):
@@ -63,8 +65,8 @@ def run(args):
     learning_rate = 0.001
     training_iters = args.num_epochs
 
-    X = tf.placeholder("float", [seq_len, batch_size, INPUT_DIM])
-    y = tf.placeholder("float", [batch_size, NUM_CLASSES])
+    X = tf.placeholder("float", [seq_len+1, batch_size, INPUT_DIM])
+    y = tf.placeholder("float", [batch_size, 1])
 
     pred = ls_lstm(seq_len, X)
     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels=y))
@@ -76,6 +78,7 @@ def run(args):
         sess.run(init)
         for train_iter in range(training_iters):
             X_data, y_data = gen_data(batch_size, seq_len)
+            print(X_data.shape)
             sess.run(train_op, feed_dict={X: X_data, y: y_data})
 
 def parse_args():
