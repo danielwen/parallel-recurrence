@@ -3,8 +3,8 @@ import os
 import tensorflow as tf
 import numpy as np
 import sys
-sys.path.append(os.path.abspath("../"))
-from linear_recurrent_net.layers import linear_surrogate_lstm
+sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
+from layers import linear_surrogate_lstm
 
 INPUT_DIM = 128
 NUM_CLASSES = 2 # +1 or -1
