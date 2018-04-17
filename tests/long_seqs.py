@@ -2,7 +2,9 @@ import argparse
 import os
 import tensorflow as tf
 import numpy as np
-from .. import layers_new
+import sys
+sys.path.append(os.path.abspath("../"))
+from layers_new import linear_surrogate_lstm
 
 INPUT_DIM = 128
 NUM_CLASSES = 2 # +1 or -1

@@ -231,7 +231,7 @@ def linear_recurrence_cpu(f, b):
 
     hs = [bs[0]]
     for index in range(1, len(bs)):
-        print fs[index], bs[index]
+        print(fs[index], bs[index])
         to_append = tf.add(tf.multiply(fs[index], hs[index-1]), bs[index])
         hs.append(to_append)
     return tf.stack(hs)
