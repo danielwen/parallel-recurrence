@@ -3,7 +3,7 @@ import tensorflow as tf
 from tensorflow.python.framework import ops
 
 dir = os.path.dirname(os.path.abspath(__file__))
-_lr_module = tf.load_op_library('%s/../../lib/tf_linear_recurrence.so' % dir)
+_lr_module = tf.load_op_library('%s/../lib/tf_linear_recurrence.so' % dir)
 
 def linear_recurrence(decays, impulses, initial_state=None):
     '''

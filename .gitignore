@@ -1,3 +1,4 @@
 *.pyc
 .DS_Store
 ._*
+linear_recurrent_net/lib

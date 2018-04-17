@@ -55,7 +55,7 @@ def ls_lstm(seq_len, X):
     outputs = linear_surrogate_lstm(layer1, n_hidden, name='ls-lstm2')    
     pred = tf.matmul(outputs[-1], W) + b
 
-    return x, y, pred
+    return pred
 
 def run(args):
     seq_len = args.seq_len

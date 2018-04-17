@@ -1,7 +1,7 @@
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/shape_inference.h"
-#include "../../linear_recurrence.h"
+#include "../linear_recurrence.h"
 
 using namespace tensorflow;
 
