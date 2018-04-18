@@ -126,7 +126,8 @@ def plr_slr(bs_seq_len_list):
                         times.append(finish - start)
         s_ls_lstm_tp = (bs * n_steps) / np.mean(times)
 
-        return [ls_lstm_tp, s_ls_lstm_tp]
+        # throughput_list.append([ls_lstm_tp, s_ls_lstm_tp])
+        # continue
 
 
         tf.reset_default_graph()        
@@ -422,14 +423,16 @@ if __name__ == "__main__":
     import numpy as np
     seq_len_list = [16 ** x for x in range(1, 5)]    
     out = plr_slr(seq_len_list)
-    # p_ls_lstm, s_ls_lstm, p_sru, s_sru, p_2_qrnn, s_2_qrnn, p_10_qrnn, s_10_qrnn = zip(*out)
-    p_ls_lstm, s_ls_lstm = zip(*out)
-    print(np.array(p_ls_lstm) / np.array(s_ls_lstm))
-
-    # print np.array(p_sru) / np.array(s_sru)
-    # print np.array(p_2_qrnn) / np.array(s_2_qrnn)
-    # print np.array(p_10_qrnn) / np.array(s_10_qrnn)
-
+    print(type(out))
+    print(len(out))
+    p_ls_lstm, s_ls_lstm, p_sru, s_sru, p_2_qrnn, s_2_qrnn, p_10_qrnn, s_10_qrnn = zip(*out)
+    # p_ls_lstm, s_ls_lstm = zip(*out)
+    print("Throughput ratios (P/S)")
+    print("LS LSTM", np.array(p_ls_lstm) / np.array(s_ls_lstm))
+    print("SRU: ", np.array(p_sru) / np.array(s_sru))
+    print("QRNN (filter_size=2): ", np.array(p_2_qrnn) / np.array(s_2_qrnn))
+    print("QRNN (filter_size=10)", np.array(p_10_qrnn) / np.array(s_10_qrnn)
+)
 
 
     # in_list1 = [[1, x] for x in [2**z for z in range(8, 19-1)]]
