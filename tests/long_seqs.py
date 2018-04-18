@@ -3,8 +3,12 @@ import os
 import tensorflow as tf
 import numpy as np
 import sys
+import time
 sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
 from linear_recurrent_net.layers import linear_surrogate_lstm
+from tensorflow import nn
+from tensorflow.contrib import rnn
+
 
 INPUT_DIM = 128
 
@@ -41,7 +45,7 @@ def gen_data(batch_size, seq_length):
 
     return batch_X, batch_y
 
-def ls_lstm(seq_len, X):
+def ls_lstm(X):
     n_hidden = 512
 
     W = tf.get_variable('W', initializer=
@@ -55,9 +59,25 @@ def ls_lstm(seq_len, X):
 
     return pred
 
+def lstm(X):
+    n_hidden = 512
+    n_layers = 2
+    cell = rnn.MultiRNNCell([rnn.BasicLSTMCell(n_hidden) for _ in range(n_layers)])
+    outputs, _ = nn.static_rnn(cell, [X[i] for i in range(X.shape[0])], dtype="float")
+    W = tf.get_variable('W', initializer=
+                         tf.random_normal([n_hidden, INPUT_DIM]), dtype='float')
+    b = tf.get_variable('b', initializer=tf.zeros([INPUT_DIM]), dtype='float')
+    pred = tf.matmul(outputs[-1], W) + b
+
+    return pred
+
 def run(args):
+    if args.ls:
+        print("Using LS-LSTM")
+    else:
+        print("Using traditional LSTM")
     seq_len = args.seq_len
-    batch_size = 65536 // seq_len
+    batch_size = 2**16 // seq_len
     print(f"Using batch size: {batch_size}")
     learning_rate = args.lr
     training_iters = args.num_epochs
@@ -65,19 +85,23 @@ def run(args):
     X = tf.placeholder("float", [seq_len+1, batch_size, INPUT_DIM])
     y = tf.placeholder("float", [batch_size, INPUT_DIM])
 
-    pred = ls_lstm(seq_len, X)
-    # errors = tf.count_nonzero(tf.sign(pred[:,0]) - y[:,0])
+    pred = ls_lstm(X) if args.ls else lstm(X)
     pred_max = tf.argmax(pred, axis=1)
     y_max = tf.argmax(y, axis=1)
-    eq = pred_max == y_max
     num_err = tf.count_nonzero((pred_max - y_max))
     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels=y))
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
     train_op = optimizer.minimize(loss)
     init = tf.global_variables_initializer()
 
+    streak = 0
+    target_streak = 5
+    tolerance = 0.01
+
     with tf.Session() as sess:
         sess.run(init)
+        start_time = time.time()
+
         for train_iter in range(training_iters):
             if train_iter % args.print_epoch == 0:
                 print("Epoch", train_iter)
@@ -85,13 +109,26 @@ def run(args):
             # print(X_data.shape)
             # print(y_data.shape)
             _, loss_val, err, p_max, ys_max = sess.run([train_op, loss, num_err, pred_max, y_max], feed_dict={X: X_data, y: y_data})
-            print("Loss:", loss_val, "Accuracy:", 1 - err/batch_size)
+            error = err/batch_size
+            print("Loss:", loss_val, "Accuracy:", 1 - error)
+
+            if error < tolerance:
+                streak += 1
+            else:
+                streak = 0
+            if streak == target_streak:
+                break
+
+    duration = time.time() - start_time
+    print("Train time:", duration)
 
 def parse_args():
     args = argparse.ArgumentParser()
+    args.add_argument("--ls", action="store_true", help="Use LS-LSTM")
     args.add_argument("--seq-len", required=True, type=int)
 
-    args.add_argument("--lr", type=float, default=0.006)
+    # Traditional: 0.1  LS-LSTM: 0.005
+    args.add_argument("--lr", type=float, default=0.005)
     args.add_argument("--num-epochs", type=int, default=500)
 
     args.add_argument("--print-epoch", default=1, help="How often to print epoch number")
