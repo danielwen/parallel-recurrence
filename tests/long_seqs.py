@@ -7,7 +7,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
 from linear_recurrent_net.layers import linear_surrogate_lstm
 
 INPUT_DIM = 128
-NUM_CLASSES = 2 # +1 or -1
 
 def gen_sample(seq_length):
 
@@ -43,12 +42,7 @@ def gen_data(batch_size, seq_length):
     return batch_X, batch_y
 
 def ls_lstm(seq_len, X):
-    n_hidden = 256
-    n_classes = 2
-    n_steps = seq_len
-    batch_size = 65536 // seq_len
-    n_input = 24
-    n_layers = 2
+    n_hidden = 512
 
     W = tf.get_variable('W', initializer=
                          tf.random_normal([n_hidden, INPUT_DIM]), dtype='float')
@@ -56,14 +50,16 @@ def ls_lstm(seq_len, X):
 
     layer1 = linear_surrogate_lstm(X, n_hidden, name='ls-lstm')
     outputs = linear_surrogate_lstm(layer1, n_hidden, name='ls-lstm2')    
+    print("*"*40, outputs.shape)
     pred = tf.matmul(outputs[-1], W) + b
 
     return pred
 
 def run(args):
     seq_len = args.seq_len
-    batch_size = args.batch_size
-    learning_rate = 0.001
+    batch_size = 65536 // seq_len
+    print(f"Using batch size: {batch_size}")
+    learning_rate = args.lr
     training_iters = args.num_epochs
 
     X = tf.placeholder("float", [seq_len+1, batch_size, INPUT_DIM])
@@ -83,6 +79,8 @@ def run(args):
     with tf.Session() as sess:
         sess.run(init)
         for train_iter in range(training_iters):
+            if train_iter % args.print_epoch == 0:
+                print("Epoch", train_iter)
             X_data, y_data = gen_data(batch_size, seq_len)
             # print(X_data.shape)
             # print(y_data.shape)
@@ -93,9 +91,8 @@ def parse_args():
     args = argparse.ArgumentParser()
     args.add_argument("--seq-len", required=True, type=int)
 
-    args.add_argument("--lr", default=1e-4)
-    args.add_argument("--batch-size", type=int, default=256)
-    args.add_argument("--num-epochs", type=int, default=100)
+    args.add_argument("--lr", type=float, default=0.006)
+    args.add_argument("--num-epochs", type=int, default=500)
 
     args.add_argument("--print-epoch", default=1, help="How often to print epoch number")
     args.add_argument("--gpuid", default=-1, type=int)
