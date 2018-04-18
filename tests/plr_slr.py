@@ -8,12 +8,15 @@ def plr_slr(bs_seq_len_list):
     import scipy.io.wavfile
     from tensorflow.contrib import rnn
     import math
-    from layers_new import linear_surrogate_lstm
-    from layers_new import s_linear_surrogate_lstm
-    from layers_new import SRU
-    from layers_new import s_SRU
-    from layers_new import QRNN
-    from layers_new import s_QRNN        
+    import os
+    import sys
+    sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
+    from linear_recurrent_net.layers import linear_surrogate_lstm
+    from linear_recurrent_net.layers import s_linear_surrogate_lstm
+    from linear_recurrent_net.layers import SRU
+    from linear_recurrent_net.layers import s_SRU
+    from linear_recurrent_net.layers import QRNN
+    from linear_recurrent_net.layers import s_QRNN        
     import time
     import os
     import random
@@ -35,9 +38,9 @@ def plr_slr(bs_seq_len_list):
         n_hidden = 256
         n_classes = 2
         n_steps = seq_len
-        batch_size = 65536 / seq_len
+        batch_size = 65536 // seq_len
         bs = batch_size
-        print "Batch size is {} and sequence length is {}".format(bs, seq_len)
+        print("Batch size is {} and sequence length is {}".format(bs, seq_len))
         n_input = 24
         n_layers = 2
         forget_gate_init = 1.0                          # = 1/(n_in). We use uniform p(x)
@@ -84,6 +87,7 @@ def plr_slr(bs_seq_len_list):
         ls_lstm_tp = (bs * n_steps) / np.mean(times)
 
 
+
         tf.reset_default_graph()        
         x = tf.placeholder("float", [n_steps, batch_size, n_input])
         y = tf.placeholder("float", [batch_size, n_classes])
@@ -121,6 +125,9 @@ def plr_slr(bs_seq_len_list):
                         finish = time.time()
                         times.append(finish - start)
         s_ls_lstm_tp = (bs * n_steps) / np.mean(times)
+
+        # throughput_list.append([ls_lstm_tp, s_ls_lstm_tp])
+        # continue
 
 
         tf.reset_default_graph()        
@@ -326,8 +333,8 @@ def plr_slr(bs_seq_len_list):
                         finish = time.time()
                         times.append(finish - start)
         s_qrnn_2_tp = (bs * n_steps) / np.mean(times)
-        print np.mean(times)
-        print np.std(times)
+        print(np.mean(times))
+        print(np.std(times))
 
         tf.reset_default_graph()        
         x = tf.placeholder("float", [n_steps, batch_size, n_input])
@@ -416,11 +423,18 @@ if __name__ == "__main__":
     import numpy as np
     seq_len_list = [16 ** x for x in range(1, 5)]    
     out = plr_slr(seq_len_list)
+    print(type(out))
+    print(len(out))
     p_ls_lstm, s_ls_lstm, p_sru, s_sru, p_2_qrnn, s_2_qrnn, p_10_qrnn, s_10_qrnn = zip(*out)
-    print np.array(p_ls_lstm) / np.array(s_ls_lstm)
-    print np.array(p_sru) / np.array(s_sru) 
-    print np.array(p_2_qrnn) / np.array(s_2_qrnn)
-    print np.array(p_10_qrnn) / np.array(s_10_qrnn)     
+    # p_ls_lstm, s_ls_lstm = zip(*out)
+    print("Throughput ratios (P/S)")
+    print("LS LSTM", np.array(p_ls_lstm) / np.array(s_ls_lstm))
+    print("SRU: ", np.array(p_sru) / np.array(s_sru))
+    print("QRNN (filter_size=2): ", np.array(p_2_qrnn) / np.array(s_2_qrnn))
+    print("QRNN (filter_size=10)", np.array(p_10_qrnn) / np.array(s_10_qrnn)
+)
+
+
     # in_list1 = [[1, x] for x in [2**z for z in range(8, 19-1)]]
     # in_list2 = [[2, x] for x in [2**z for z in range(8, 19-2)]]
     # in_list4 = [[4, x] for x in [2**z for z in range(8, 19-3)]]

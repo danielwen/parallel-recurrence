@@ -1,5 +1,5 @@
 import tensorflow as tf
-from linear_recurrent_net.tensorflow_binding import linear_recurrence
+from linear_recurrent_net.tensorflow_binding import linear_recurrence, serial_linear_recurrence
 
 def vscope(name):
     return tf.variable_scope(None, default_name=name)
@@ -128,7 +128,8 @@ def s_gilr_layer(X, hidden_size, nonlin=tf.nn.elu,
         gate, impulse = tf.split(act, 2, len(act.shape) - 1)
         gate = tf.sigmoid(gate)
         impulse = nonlin(impulse)
-        return linear_recurrence(gate, (1-gate) * impulse, serial=True)
+        # return linear_recurrence(gate, (1-gate) * impulse, serial=True)
+        return serial_linear_recurrence(gate, (1-gate) * impulse)
 
 def s_linear_surrogate_lstm(X, hidden_size, name='lin_sur_lstm'):
     with vscope(name):
@@ -146,7 +147,8 @@ def s_linear_surrogate_lstm(X, hidden_size, name='lin_sur_lstm'):
         o = tf.sigmoid(o)
         z = tf.tanh(z)
 
-        c = linear_recurrence(f, i * z, serial=True)
+        # c = linear_recurrence(f, i * z, serial=True)
+        c = serial_linear_recurrence(f, i * z)
         h = o * c
         return h
 
@@ -159,7 +161,8 @@ def s_SRU(X, name='SRU'):
         f = tf.sigmoid(f_pre)
         r = tf.sigmoid(r_pre)
         
-        c = linear_recurrence(f, (1 - f) * x_tilde, serial=True)
+        # c = linear_recurrence(f, (1 - f) * x_tilde, serial=True)
+        c = serial_linear_recurrence(f, (1 - f) * x_tilde)
         h = r * c + (1 - r) * X
         return h
     
@@ -182,7 +185,8 @@ def s_QRNN(X, n, name='qrnn'):
         f = tf.sigmoid(tf.add_n(tf.split(f, n, len(preact.shape) - 1)))
         o = tf.sigmoid(tf.add_n(tf.split(o, n, len(preact.shape) - 1)))
 
-        c = linear_recurrence(f, (1 - f) * z, serial=True)
+        # c = linear_recurrence(f, (1 - f) * z, serial=True)
+        c = serial_linear_recurrence(f, (1 - f) * z)
         h = o * c
         return h
 
