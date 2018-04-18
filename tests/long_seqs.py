@@ -22,7 +22,8 @@ def gen_sample(seq_length):
 
     X = np.concatenate((desired_vec, X), axis=0)
 
-    return X, desired_class
+    desired_vec = desired_vec.squeeze(0)
+    return X, desired_vec
 
 def gen_data(batch_size, seq_length):
 
@@ -50,8 +51,8 @@ def ls_lstm(seq_len, X):
     n_layers = 2
 
     W = tf.get_variable('W', initializer=
-                         tf.random_normal([n_hidden, n_classes]), dtype='float')
-    b = tf.get_variable('b', initializer=tf.zeros([n_classes]), dtype='float')
+                         tf.random_normal([n_hidden, INPUT_DIM]), dtype='float')
+    b = tf.get_variable('b', initializer=tf.zeros([INPUT_DIM]), dtype='float')
 
     layer1 = linear_surrogate_lstm(X, n_hidden, name='ls-lstm')
     outputs = linear_surrogate_lstm(layer1, n_hidden, name='ls-lstm2')    
@@ -66,7 +67,7 @@ def run(args):
     training_iters = args.num_epochs
 
     X = tf.placeholder("float", [seq_len+1, batch_size, INPUT_DIM])
-    y = tf.placeholder("float", [batch_size, 1])
+    y = tf.placeholder("float", [batch_size, INPUT_DIM])
 
     pred = ls_lstm(seq_len, X)
     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels=y))
@@ -79,6 +80,7 @@ def run(args):
         for train_iter in range(training_iters):
             X_data, y_data = gen_data(batch_size, seq_len)
             print(X_data.shape)
+            print(y_data.shape)
             sess.run(train_op, feed_dict={X: X_data, y: y_data})
 
 def parse_args():
