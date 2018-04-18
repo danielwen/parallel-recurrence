@@ -70,18 +70,20 @@ def run(args):
     y = tf.placeholder("float", [batch_size, INPUT_DIM])
 
     pred = ls_lstm(seq_len, X)
+    errors = tf.count_nonzero(tf.sign(pred[:,0]) - y[:,0])
     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels=y))
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
-    init = tf.global_variables_initializer()
     train_op = optimizer.minimize(loss)
+    init = tf.global_variables_initializer()
 
     with tf.Session() as sess:
         sess.run(init)
         for train_iter in range(training_iters):
             X_data, y_data = gen_data(batch_size, seq_len)
-            print(X_data.shape)
-            print(y_data.shape)
-            sess.run(train_op, feed_dict={X: X_data, y: y_data})
+            # print(X_data.shape)
+            # print(y_data.shape)
+            _, loss_val, errors_val = sess.run([train_op, loss, errors], feed_dict={X: X_data, y: y_data})
+            print("Loss:", loss_val, "Accuracy:", 1 - errors_val / batch_size)
 
 def parse_args():
     args = argparse.ArgumentParser()
@@ -89,7 +91,7 @@ def parse_args():
 
     args.add_argument("--lr", default=1e-4)
     args.add_argument("--batch-size", type=int, default=256)
-    args.add_argument("--num-epochs", default=10)
+    args.add_argument("--num-epochs", default=100)
 
     args.add_argument("--print-epoch", default=1, help="How often to print epoch number")
     args.add_argument("--gpuid", default=-1, type=int)
