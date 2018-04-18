@@ -5,7 +5,7 @@ from tensorflow.python.framework import ops
 dir = os.path.dirname(os.path.abspath(__file__))
 _lr_module = tf.load_op_library('%s/../lib/tf_linear_recurrence.so' % dir)
 
-def linear_recurrence(decays, impulses, initial_state=None):
+def linear_recurrence(decays, impulses, serial=False, initial_state=None):
     '''
     Compute r[i] = decays[i] * r[i - 1] + impulses[i] with r[0] = initial_state.
 
@@ -24,14 +24,19 @@ def linear_recurrence(decays, impulses, initial_state=None):
         impulses = tf.reshape(impulses, [shape[0], tail])
         initial_state = tf.reshape(initial_state, [tail])
 
-    resp = _lr_module.linear_recurrence(decays, impulses, initial_state)
+    if not serial:
+        resp = _lr_module.linear_recurrence(decays, impulses, initial_state)
+    else:
+        resp = _lr_module.serial_linear_recurrence(decays, impulses, initial_state)
 
     if rank > 2:
         resp = tf.reshape(resp, shape)
     return resp
 
-@ops.RegisterGradient("LinearRecurrence")
-def _linear_recurrence_grad(op, dl_dresp):
+# @ops.RegisterGradient("LinearRecurrence")
+@ops.RegisterGradient("LinearRecurrence")(partial(_linear_recurrence_grad, serial=False))
+@ops.RegisterGradient("SerialLinearRecurrence")(partial(_linear_recurrence_grad, serial=True))
+def _linear_recurrence_grad(op, dl_dresp, serial=False):
     decays = op.inputs[0]
     impulses = op.inputs[1]
     initial_state = op.inputs[2]
@@ -39,7 +44,7 @@ def _linear_recurrence_grad(op, dl_dresp):
     n_steps = tf.shape(impulses)[0]
 
     # forwards goes from h_0 to h_{T-1}
-    forwards_tail = linear_recurrence(decays, impulses, initial_state)[:-1, :]
+    forwards_tail = linear_recurrence(decays, impulses, initial_state, serial=serial)[:-1, :]
     forwards = tf.concat([tf.expand_dims(initial_state, 0), forwards_tail],
                          axis=0)
 
@@ -53,6 +58,7 @@ def _linear_recurrence_grad(op, dl_dresp):
             reverse(decays)[:-1, :],
             reverse(dl_dresp)[1:, :],
             dl_dresp[-1, :],
+            serial=serial
         )
     )
 
