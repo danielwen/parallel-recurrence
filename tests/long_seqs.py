@@ -12,9 +12,9 @@ NUM_CLASSES = 2 # +1 or -1
 def gen_sample(seq_length):
 
     # Choose element to be predicted
-    desired_class = np.random.choice([-1,1], size=1)
+    desired_class = np.random.choice([0,1], size=1)
     desired_vec = np.zeros((1,INPUT_DIM))
-    desired_vec[0,0] = desired_class
+    desired_vec[0, desired_class] = 1
 
     # Make random one hot vectors for the data 
     all_vectors = np.eye(INPUT_DIM)
@@ -70,7 +70,11 @@ def run(args):
     y = tf.placeholder("float", [batch_size, INPUT_DIM])
 
     pred = ls_lstm(seq_len, X)
-    errors = tf.count_nonzero(tf.sign(pred[:,0]) - y[:,0])
+    # errors = tf.count_nonzero(tf.sign(pred[:,0]) - y[:,0])
+    pred_max = tf.argmax(pred, axis=1)
+    y_max = tf.argmax(y, axis=1)
+    eq = pred_max == y_max
+    num_err = tf.count_nonzero((pred_max - y_max))
     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels=y))
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
     train_op = optimizer.minimize(loss)
@@ -82,8 +86,8 @@ def run(args):
             X_data, y_data = gen_data(batch_size, seq_len)
             # print(X_data.shape)
             # print(y_data.shape)
-            _, loss_val, errors_val = sess.run([train_op, loss, errors], feed_dict={X: X_data, y: y_data})
-            print("Loss:", loss_val, "Accuracy:", 1 - errors_val / batch_size)
+            _, loss_val, err, p_max, ys_max = sess.run([train_op, loss, num_err, pred_max, y_max], feed_dict={X: X_data, y: y_data})
+            print("Loss:", loss_val, "Accuracy:", 1 - err/batch_size)
 
 def parse_args():
     args = argparse.ArgumentParser()
@@ -91,7 +95,7 @@ def parse_args():
 
     args.add_argument("--lr", default=1e-4)
     args.add_argument("--batch-size", type=int, default=256)
-    args.add_argument("--num-epochs", default=100)
+    args.add_argument("--num-epochs", type=int, default=100)
 
     args.add_argument("--print-epoch", default=1, help="How often to print epoch number")
     args.add_argument("--gpuid", default=-1, type=int)
