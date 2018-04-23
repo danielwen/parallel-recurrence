@@ -52,7 +52,7 @@ __device__ int2 compute_warp_start_stop(int block_idx, int warp_idx,
 
 // decay storage, h_storage:
 //   each a n_dims x 33 x n_blocks matrix on GPU with 33rd column for block reduction
-__global__ void reduction_kernel(float *decays, float *impulses,
+__global__ void reduction_kernel_baseline(float *decays, float *impulses,
 				 float *initial_state,
 				 float *_decay_storage, float *_h_storage,
 				 int n_dims, int n_steps) {
@@ -112,7 +112,7 @@ __global__ void reduction_kernel(float *decays, float *impulses,
   }
 }
 
-__global__ void block_scan_kernel(float *decay_storage, float *h_storage,
+__global__ void block_scan_kernel_baseline(float *decay_storage, float *h_storage,
 				  int n_dims, int n_blocks) {
   /*
    * Scan over blocks.
@@ -137,7 +137,7 @@ __global__ void block_scan_kernel(float *decay_storage, float *h_storage,
   }
 }
 
-__global__ void warp_scan_kernel(float *decays, float *impulses,
+__global__ void warp_scan_kernel_baseline(float *decays, float *impulses,
 				 float *initial_state, float *out,
 				 float *decay_storage, float *h_storage,
 				 int n_dims, int n_steps) {
@@ -205,7 +205,7 @@ __global__ void warp_scan_kernel(float *decays, float *impulses,
   }
 }
 
-__global__ void serial_linear_recurrence(float *decays, float *impulses,
+__global__ void serial_linear_recurrence_baseline(float *decays, float *impulses,
                                          float *initial_state, float *out,
                                          int n_dims, int n_steps) {
   // computes h_t = lambda_t h{t-1} + x_t
@@ -231,7 +231,7 @@ extern "C" {
  * initial_state:
  *   array of size n_dims located on GPU
  */
-void compute_linear_recurrence(float *decays, float *impulses, float *initial_state,
+void compute_linear_recurrence_baseline(float *decays, float *impulses, float *initial_state,
 			       float *out, int n_dims, int n_steps) {
 
   // TODO: query
@@ -251,14 +251,14 @@ void compute_linear_recurrence(float *decays, float *impulses, float *initial_st
   float *d_h_storage = &d_reduction_mem[1 * n_blocks * 33 * n_dims];
 
   // TODO: run kernels on non-default stream?
-  reduction_kernel<<<n_blocks, 1024>>>(decays, impulses, initial_state,
+  reduction_kernel_baseline<<<n_blocks, 1024>>>(decays, impulses, initial_state,
 				       d_decay_storage, d_h_storage,
 				       n_dims, n_steps);
 
-  block_scan_kernel<<<n_blocks, 1024>>>(d_decay_storage, d_h_storage,
+  block_scan_kernel_baseline<<<n_blocks, 1024>>>(d_decay_storage, d_h_storage,
 					n_dims, n_blocks);
 
-  warp_scan_kernel<<<n_blocks, 1024>>>(decays, impulses,
+  warp_scan_kernel_baseline<<<n_blocks, 1024>>>(decays, impulses,
 				       initial_state, out,
 				       d_decay_storage, d_h_storage,
 				       n_dims, n_steps);
@@ -266,7 +266,7 @@ void compute_linear_recurrence(float *decays, float *impulses, float *initial_st
   gpuErrChk(cudaFree(d_reduction_mem));
 }
 
-void compute_serial_linear_recurrence(float *decays, float *impulses,
+void compute_serial_linear_recurrence_baseline(float *decays, float *impulses,
                                       float *initial_state, float *out,
                                       int n_dims, int n_steps) {
   // TODO: query
@@ -274,7 +274,7 @@ void compute_serial_linear_recurrence(float *decays, float *impulses,
   int n_blocks_per_sm = 2;
 
   int n_blocks = n_SMs * n_blocks_per_sm;
-  serial_linear_recurrence<<<n_blocks, 1024>>>(decays, impulses, initial_state,
+  serial_linear_recurrence_baseline<<<n_blocks, 1024>>>(decays, impulses, initial_state,
                                                out, n_dims, n_steps);
 }
 }
@@ -307,7 +307,7 @@ void test() {
   gpuErrChk(cudaMalloc(&d_out, n_elements * sizeof(float)));
   gpuErrChk(cudaMemset(d_out, 0, n_elements * sizeof(float)));
 
-  compute_linear_recurrence(d_decays, d_impulses, NULL, d_out, n_dims, n_steps);
+  compute_linear_recurrence_baseline(d_decays, d_impulses, NULL, d_out, n_dims, n_steps);
   gpuErrChk(cudaMemcpy(out, d_out, n_elements * sizeof(float),
 		       cudaMemcpyDeviceToHost));
 

@@ -5,7 +5,7 @@ import numpy as np
 import sys
 import time
 sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
-from linear_recurrent_net.layers import linear_surrogate_lstm
+from linear_recurrent_net.layers import linear_surrogate_lstm, Alg
 from tensorflow import nn
 from tensorflow.contrib import rnn
 
@@ -45,15 +45,15 @@ def gen_data(batch_size, seq_length):
 
     return batch_X, batch_y
 
-def ls_lstm(X):
+def ls_lstm(X, alg):
     n_hidden = 512
 
     W = tf.get_variable('W', initializer=
                          tf.random_normal([n_hidden, INPUT_DIM]), dtype='float')
     b = tf.get_variable('b', initializer=tf.zeros([INPUT_DIM]), dtype='float')
 
-    layer1 = linear_surrogate_lstm(X, n_hidden, name='ls-lstm')
-    outputs = linear_surrogate_lstm(layer1, n_hidden, name='ls-lstm2')    
+    layer1 = linear_surrogate_lstm(X, n_hidden, alg=Alg.BASELINE, name='ls-lstm')
+    outputs = linear_surrogate_lstm(layer1, n_hidden, alg=Alg.BASELINE, name='ls-lstm2')    
     print("*"*40, outputs.shape)
     pred = tf.matmul(outputs[-1], W) + b
 
@@ -85,7 +85,7 @@ def run(args):
     X = tf.placeholder("float", [seq_len+1, batch_size, INPUT_DIM])
     y = tf.placeholder("float", [batch_size, INPUT_DIM])
 
-    pred = ls_lstm(X) if args.ls else lstm(X)
+    pred = ls_lstm(X, alg=Alg.BASELINE) if args.ls else lstm(X)
     pred_max = tf.argmax(pred, axis=1)
     y_max = tf.argmax(y, axis=1)
     num_err = tf.count_nonzero((pred_max - y_max))

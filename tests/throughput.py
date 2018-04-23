@@ -11,12 +11,7 @@ def plr_slr(bs_seq_len_list):
     import os
     import sys
     sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
-    from linear_recurrent_net.layers import linear_surrogate_lstm
-    from linear_recurrent_net.layers import s_linear_surrogate_lstm
-    from linear_recurrent_net.layers import SRU
-    from linear_recurrent_net.layers import s_SRU
-    from linear_recurrent_net.layers import QRNN
-    from linear_recurrent_net.layers import s_QRNN        
+    from linear_recurrent_net.layers import linear_surrogate_lstm, SRU, QRNN, Alg            
     import time
     import os
     import random
@@ -56,8 +51,8 @@ def plr_slr(bs_seq_len_list):
                              tf.random_normal([n_hidden, n_classes]), dtype='float')
         b1 = tf.get_variable('b1', initializer=tf.zeros([n_classes]), dtype='float')
 
-        layer1 = linear_surrogate_lstm(x, n_hidden, name='ls-lstm')
-        outputs = linear_surrogate_lstm(layer1, n_hidden, name='ls-lstm2')    
+        layer1 = linear_surrogate_lstm(x, n_hidden, alg=Alg.BASELINE, name='ls-lstm')
+        outputs = linear_surrogate_lstm(layer1, n_hidden, alg=Alg.BASELINE, name='ls-lstm2')    
         pred = tf.matmul(outputs[-1], W1) + b1
         #Evaluate network, run adam and clip gradients
         ################################################################################
@@ -95,8 +90,8 @@ def plr_slr(bs_seq_len_list):
         W1 = tf.get_variable('W1', initializer=
                              tf.random_normal([n_hidden, n_classes]), dtype='float')
         b1 = tf.get_variable('b1', initializer=tf.zeros([n_classes]), dtype='float')
-        layer1 = s_linear_surrogate_lstm(x, n_hidden, name='ls-lstm')
-        output = s_linear_surrogate_lstm(layer1, n_hidden, name='ls-lstm')        
+        layer1 = linear_surrogate_lstm(x, n_hidden, alg=Alg.SERIAL_BASELINE, name='ls-lstm')
+        output = linear_surrogate_lstm(layer1, n_hidden, alg=Alg.SERIAL_BASELINE, name='ls-lstm')        
         pred = tf.matmul(output[-1], W1) + b1
 
         #Evaluate network, run adam and clip gradients
@@ -137,57 +132,8 @@ def plr_slr(bs_seq_len_list):
         W1 = tf.get_variable('W1', initializer=
                              tf.random_normal([n_input, n_classes]), dtype='float')
         b1 = tf.get_variable('b1', initializer=tf.zeros([n_classes]), dtype='float')
-        layer1 = SRU(x, name='SRU_1')
-        output = SRU(layer1, name='SRU_2')
-        pred = tf.matmul(output[-1], W1) + b1
-
-        tf.reset_default_graph()        
-        x = tf.placeholder("float", [n_steps, batch_size, n_input])
-        y = tf.placeholder("float", [batch_size, n_classes])
-        tf.get_variable_scope().reuse == True
-        W1 = tf.get_variable('W1', initializer=
-                             tf.random_normal([n_hidden, n_classes]), dtype='float')
-        b1 = tf.get_variable('b1', initializer=tf.zeros([n_classes]), dtype='float')
-        layer1 = s_linear_surrogate_lstm(x, n_hidden, name='ls-lstm')
-        output = s_linear_surrogate_lstm(layer1, n_hidden, name='ls-lstm')        
-        pred = tf.matmul(output[-1], W1) + b1
-
-        #Evaluate network, run adam and clip gradients
-        ################################################################################
-        cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels=y))
-        optimizer_0 = tf.train.AdamOptimizer(learning_rate=learning_rate)
-        raw_gradients, variables = zip(*optimizer_0.compute_gradients(cost))
-        gradients = raw_gradients
-        optimizer = optimizer_0.apply_gradients(zip(gradients, variables))
-        init = tf.global_variables_initializer()
-
-        #Initialise the model and evaluate
-        step = 0
-        times = []
-        x_in = np.random.random((n_steps, batch_size, n_input))
-        y_in = np.random.random((batch_size, n_classes))
-        with tf.device("gpu:0"):
-            with tf.Session() as sess:
-                sess.run(init)
-                while step < 10:
-                    out = sess.run(pred, feed_dict={x: x_in, y: y_in})
-                    step += 1
-                    if step != 0:
-                        start = time.time()
-                        out = sess.run(pred, feed_dict={x: x_in, y: y_in})
-                        finish = time.time()
-                        times.append(finish - start)
-        s_ls_lstm_tp = (bs * n_steps) / np.mean(times)
-
-        tf.reset_default_graph()        
-        x = tf.placeholder("float", [n_steps, batch_size, n_input])
-        y = tf.placeholder("float", [batch_size, n_classes])
-        tf.get_variable_scope().reuse == True
-        W1 = tf.get_variable('W1', initializer=
-                             tf.random_normal([n_input, n_classes]), dtype='float')
-        b1 = tf.get_variable('b1', initializer=tf.zeros([n_classes]), dtype='float')
-        layer1 = SRU(x, name='SRU_1')
-        output = SRU(layer1, name='SRU_2')
+        layer1 = SRU(x, alg=Alg.BASELINE, name='SRU_1')
+        output = SRU(layer1, alg=Alg.BASELINE, name='SRU_2')
         pred = tf.matmul(output[-1], W1) + b1        
 
         #Evaluate network, run adam and clip gradients
@@ -217,7 +163,7 @@ def plr_slr(bs_seq_len_list):
                         times.append(finish - start)
         sru_tp = (bs * n_steps) / np.mean(times)        
 
-
+        # Serial SRU
         tf.reset_default_graph()        
         x = tf.placeholder("float", [n_steps, batch_size, n_input])
         y = tf.placeholder("float", [batch_size, n_classes])
@@ -225,8 +171,8 @@ def plr_slr(bs_seq_len_list):
         W1 = tf.get_variable('W1', initializer=
                              tf.random_normal([n_input, n_classes]), dtype='float')
         b1 = tf.get_variable('b1', initializer=tf.zeros([n_classes]), dtype='float')
-        layer1 = s_SRU(x, name='s_SRU_1')
-        output = s_SRU(layer1, name='s_SRU_2')
+        layer1 = SRU(x, alg=Alg.SERIAL_BASELINE, name='s_SRU_1')
+        output = SRU(layer1, alg=Alg.SERIAL_BASELINE, name='s_SRU_2')
         pred = tf.matmul(output[-1], W1) + b1        
 
         #Evaluate network, run adam and clip gradients
@@ -255,7 +201,9 @@ def plr_slr(bs_seq_len_list):
                         finish = time.time()
                         times.append(finish - start)
         s_sru_tp = (bs * n_steps) / np.mean(times)
-        
+
+
+        ########################################## QRNN 2       
 
         tf.reset_default_graph()        
         x = tf.placeholder("float", [n_steps, batch_size, n_input])
@@ -264,8 +212,8 @@ def plr_slr(bs_seq_len_list):
         W1 = tf.get_variable('W1', initializer=
                              tf.random_normal([n_input, n_classes]), dtype='float')
         b1 = tf.get_variable('b1', initializer=tf.zeros([n_classes]), dtype='float')
-        layer1 = QRNN(x, 2, name='QRNN_1')
-        output = QRNN(layer1, 2, name='QRNN_2')
+        layer1 = QRNN(x, 2, alg=Alg.BASELINE, name='QRNN_1')
+        output = QRNN(layer1, 2, alg=Alg.BASELINE, name='QRNN_2')
         pred = tf.matmul(output[-1], W1) + b1
 
         #Evaluate network, run adam and clip gradients
@@ -296,6 +244,7 @@ def plr_slr(bs_seq_len_list):
         qrnn_2_tp = (bs * n_steps) / np.mean(times)
 
 
+        # Serial QRNN 2
         tf.reset_default_graph()        
         x = tf.placeholder("float", [n_steps, batch_size, n_input])
         y = tf.placeholder("float", [batch_size, n_classes])
@@ -303,8 +252,8 @@ def plr_slr(bs_seq_len_list):
         W1 = tf.get_variable('W1', initializer=
                              tf.random_normal([n_input, n_classes]), dtype='float')
         b1 = tf.get_variable('b1', initializer=tf.zeros([n_classes]), dtype='float')
-        layer1 = s_QRNN(x, 2, name='s_QRNN_3')
-        output = s_QRNN(layer1, 2, name='s_QRNN_4')
+        layer1 = QRNN(x, 2, alg=Alg.SERIAL_BASELINE, name='s_QRNN_3')
+        output = QRNN(layer1, 2, alg=Alg.SERIAL_BASELINE, name='s_QRNN_4')
         pred = tf.matmul(output[-1], W1) + b1
 
         #Evaluate network, run adam and clip gradients
@@ -336,6 +285,9 @@ def plr_slr(bs_seq_len_list):
         print(np.mean(times))
         print(np.std(times))
 
+
+        ########################################## QRNN 10
+
         tf.reset_default_graph()        
         x = tf.placeholder("float", [n_steps, batch_size, n_input])
         y = tf.placeholder("float", [batch_size, n_classes])
@@ -343,8 +295,8 @@ def plr_slr(bs_seq_len_list):
         W1 = tf.get_variable('W1', initializer=
                              tf.random_normal([n_input, n_classes]), dtype='float')
         b1 = tf.get_variable('b1', initializer=tf.zeros([n_classes]), dtype='float')
-        layer1 = QRNN(x, 10, name='QRNN_2')
-        output = QRNN(layer1, 10, name='QRNN_6')
+        layer1 = QRNN(x, 10, alg=Alg.BASELINE, name='QRNN_2')
+        output = QRNN(layer1, 10, alg=Alg.BASELINE, name='QRNN_6')
         pred = tf.matmul(output[-1], W1) + b1
 
         #Evaluate network, run adam and clip gradients
@@ -375,6 +327,7 @@ def plr_slr(bs_seq_len_list):
         qrnn_10_tp = (bs * n_steps) / np.mean(times)
 
 
+        # Serail QRNN 10
         tf.reset_default_graph()        
         x = tf.placeholder("float", [n_steps, batch_size, n_input])
         y = tf.placeholder("float", [batch_size, n_classes])
@@ -382,8 +335,8 @@ def plr_slr(bs_seq_len_list):
         W1 = tf.get_variable('W1', initializer=
                              tf.random_normal([n_input, n_classes]), dtype='float')
         b1 = tf.get_variable('b1', initializer=tf.zeros([n_classes]), dtype='float')
-        layer1 = s_QRNN(x, 10, name='s_QRNN_7')
-        output = s_QRNN(layer1, 10, name='s_QRNN_8')
+        layer1 = QRNN(x, 10, alg=Alg.SERIAL_BASELINE, name='s_QRNN_7')
+        output = QRNN(layer1, 10, alg=Alg.SERIAL_BASELINE, name='s_QRNN_8')
         pred = tf.matmul(output[-1], W1) + b1
 
         #Evaluate network, run adam and clip gradients
@@ -414,8 +367,9 @@ def plr_slr(bs_seq_len_list):
         s_qrnn_10_tp = (bs * n_steps) / np.mean(times)
 
         
-        throughput_list.append([ls_lstm_tp, s_ls_lstm_tp, sru_tp,
-                                s_sru_tp, qrnn_2_tp, s_qrnn_2_tp,
+        throughput_list.append([ls_lstm_tp, s_ls_lstm_tp, 
+                                sru_tp, s_sru_tp, 
+                                qrnn_2_tp, s_qrnn_2_tp,
                                 qrnn_10_tp, s_qrnn_10_tp])
     return throughput_list
 
