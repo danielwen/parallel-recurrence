@@ -1,3 +1,7 @@
+import sys, os
+sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
+from linear_recurrent_net.layers import Alg   
+
 def plr_slr(bs_seq_len_list):
     """Given a list of pairs (batch size, seq_len), 
     calculate the throughput of an LS-LSTM, an SRU, a QRNN(2),
@@ -10,7 +14,7 @@ def plr_slr(bs_seq_len_list):
     import math
     import os
     import sys
-    sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
+    # sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
     from linear_recurrent_net.layers import linear_surrogate_lstm, SRU, QRNN, Alg            
     import time
     import os
@@ -376,7 +380,14 @@ def plr_slr(bs_seq_len_list):
 if __name__ == "__main__":
     import numpy as np
     seq_len_list = [16 ** x for x in range(1, 5)]    
-    out = plr_slr(seq_len_list)
+
+    alg_name = sys.argv[1]
+    if alg_name == "baseline":
+        alg = Alg.BASELINE
+    elif alg_name == "fast":
+        alg = Alg.FAST
+
+    out = plr_slr(seq_len_list, alg=alg)
     print(type(out))
     print(len(out))
     p_ls_lstm, s_ls_lstm, p_sru, s_sru, p_2_qrnn, s_2_qrnn, p_10_qrnn, s_10_qrnn = zip(*out)

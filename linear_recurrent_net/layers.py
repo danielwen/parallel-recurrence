@@ -1,12 +1,12 @@
 import tensorflow as tf
 import enum
-from linear_recurrent_net.tensorflow_binding import linear_recurrence_baseline, serial_linear_recurrence_baseline
+from linear_recurrent_net.tensorflow_binding import fast_linear_recurrence, linear_recurrence_baseline, serial_linear_recurrence_baseline
 
 
 class Alg(enum.Enum):
     BASELINE = enum.auto()
     SERIAL_BASELINE = enum.auto()
-    PARALLEL = enum.auto()
+    FAST = enum.auto()
 
 
 def vscope(name):
@@ -73,8 +73,8 @@ def gilr_layer(X, hidden_size, alg, nonlin=tf.nn.elu,
             h = serial_linear_recurrence_baseline(gate, (1-gate) * impulse)
         elif alg == Alg.BASELINE:
             h = linear_recurrence_baseline(gate, (1-gate) * impulse)
-        elif alg == Alg.PARALLEL:
-            h = None 
+        elif alg == Alg.FAST:
+            h = fast_linear_recurrence(gate, (1-gate) * impulse)
         
         return h
 
@@ -100,8 +100,8 @@ def linear_surrogate_lstm(X, hidden_size, alg, name='lin_sur_lstm'):
             c = serial_linear_recurrence_baseline(f, i * z)
         elif alg == Alg.BASELINE:
             c = linear_recurrence_baseline(f, i * z)
-        elif alg == Alg.PARALLEL:
-            c = None 
+        elif alg == Alg.FAST:
+            c = fast_linear_recurrence(f, i * z)
 
         h = o * c
         return h
@@ -121,8 +121,8 @@ def SRU(X, alg, name='SRU'):
             c = serial_linear_recurrence_baseline(f, (1 - f) * x_tilde)
         elif alg == Alg.BASELINE:
             c = linear_recurrence_baseline(f, (1 - f) * x_tilde)
-        elif alg == Alg.PARALLEL:
-            c = None 
+        elif alg == Alg.FAST:
+            c = fast_linear_recurrence(f, i * z)
         
         h = r * c + (1 - r) * X
         return h
@@ -151,8 +151,8 @@ def QRNN(X, n, alg, name='qrnn'):
             c = serial_linear_recurrence_baseline(f, (1 - f) * z)
         elif alg == Alg.BASELINE:
             c = linear_recurrence_baseline(f, (1 - f) * z)
-        elif alg == Alg.PARALLEL:
-            c = None 
+        elif alg == Alg.FAST:
+            c = fast_linear_recurrence(f, i * z)
 
         h = o * c
         return h  

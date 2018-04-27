@@ -89,9 +89,45 @@ def serial_linear_recurrence_baseline(decays, impulses, initial_state=None):
         resp = tf.reshape(resp, shape)
     return resp
 
+@ops.RegisterGradient("FastLinearRecurrence")
+def _fast_linear_recurrence_grad(op, dl_dresp):
+    serial=False
+    decays = op.inputs[0]
+    impulses = op.inputs[1]
+    initial_state = op.inputs[2]
+
+    n_steps = tf.shape(impulses)[0]
+
+    # forwards goes from h_0 to h_{T-1}
+    # forwards_tail = linear_recurrence(decays, impulses, initial_state, serial=serial)[:-1, :]
+    forwards_tail = fast_linear_recurrence(decays, impulses, initial_state)[:-1, :]
+    forwards = tf.concat([tf.expand_dims(initial_state, 0), forwards_tail],
+                         axis=0)
+
+    reverse = lambda x: tf.reverse(x, axis=[0])
+
+    # recur on
+    # decays from T, T-1, ..., 2
+    # output gradients from T-1, T-2, ..., 1
+    dl_dh_head = reverse(
+        fast_linear_recurrence(
+            reverse(decays)[:-1, :],
+            reverse(dl_dresp)[1:, :],
+            dl_dresp[-1, :],
+            # serial=serial
+        )
+    )
+
+    dl_dh = tf.concat([dl_dh_head, dl_dresp[-1:, :]], axis=0)
+
+    dl_dinit = decays[0, :] * dl_dh[0, :]
+    dl_dimpulses = dl_dh
+    dl_ddecays = dl_dh * forwards
+
+    return [dl_ddecays, dl_dimpulses, dl_dinit]
 
 @ops.RegisterGradient("LinearRecurrenceBaseline")
-def _linear_recurrence_grad(op, dl_dresp):
+def _linear_recurrence_baseline_grad(op, dl_dresp):
     serial=False
     decays = op.inputs[0]
     impulses = op.inputs[1]
@@ -128,7 +164,7 @@ def _linear_recurrence_grad(op, dl_dresp):
     return [dl_ddecays, dl_dimpulses, dl_dinit]
 
 @ops.RegisterGradient("SerialLinearRecurrenceBaseline")
-def _serial_linear_recurrence_grad(op, dl_dresp):
+def _serial_linear_recurrence_baseline_grad(op, dl_dresp):
     serial=True
     decays = op.inputs[0]
     impulses = op.inputs[1]
