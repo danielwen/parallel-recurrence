@@ -49,62 +49,81 @@
 
 //Almost the same as naive scan1Inclusive, but doesn't need __syncthreads()
 //assuming size <= WARP_SIZE
-inline __device__ uint
-warpScanInclusive(int threadIndex, uint idata, volatile uint *s_Data, uint size){
+inline __device__ void
+warpScanInclusive(int threadIndex, float decay_data, float impulse_data,
+    volatile float *sDecayScratch, volatile float *sImpulseScratch,
+    float *resultDecay, float *resultImpulse, uint size){
     // Note some of the calculations are obscure because they are optimized.
     // For example, (threadIndex & (size - 1)) computes threadIndex % size,
     // which works, assuming size is a power of 2.
 
     uint pos = 2 * threadIndex - (threadIndex & (size - 1));
-    s_Data[pos] = 0;
+    sDecayScratch[pos] = 1.f;
+    sImpulseScratch[pos] = 0.f;
     pos += size;
-    s_Data[pos] = idata;
+    sDecayScratch[pos] = decay_data;
+    sImpulseScratch[pos] = impulse_data;
 
-    for(uint offset = 1; offset < size; offset <<= 1)
-        s_Data[pos] += s_Data[pos - offset];
+    for (uint offset = 1; offset < size; offset <<= 1) {
+        // MAYBE: do if to subtract by 0 instead of using extra space
+        sImpulseScratch[pos] = sDecayScratch[pos] * sImpulseScratch[pos - offset] + sImpulseScratch[pos];
+        sDecayScratch[pos] *= sDecayScratch[pos - offset];
+    }
 
-    return s_Data[pos];
-}
-
-inline __device__ uint warpScanExclusive(int threadIndex, uint idata, volatile uint *sScratch, uint size){
-    return warpScanInclusive(threadIndex, idata, sScratch, size) - idata;
+    *resultDecay = sDecayScratch[pos];
+    *resultImpulse = sImpulseScratch[pos];
 }
 
 __inline__ __device__ void
-sharedMemRecurrentExclusiveScan(int threadIndex, uint* sInputDecays, uint* sInputImpulses, uint* sOutputDecays, uint* sOutputImpulses, volatile uint* sDecayScratch, volatile uint* sImpulseScratch, uint size)
+sharedMemRecurrentInclusiveScan(int threadIndex, float* sInputDecays, float* sInputImpulses,
+    volatile float* sDecayScratch, volatile float* sImpulseScratch, uint size)
 {
     if (size > WARP_SIZE) {
 
-        uint idata = sInput[threadIndex];
+        float decay_data = sInputDecays[threadIndex];
+        float impulse_data = sInputImpulses[threadIndex];
 
         //Bottom-level inclusive warp scan
-        uint warpResult = warpScanInclusive(threadIndex, idata, sScratch, WARP_SIZE);
+        float warpResultDecay, warpResultImpulse;
+        warpScanInclusive(threadIndex, decay_data, impulse_data,
+            sDecayScratch, sImpulseScratch, &warpResultDecay, &warpResultImpulse,
+            WARP_SIZE);
 
         // Save top elements of each warp for exclusive warp scan sync
         // to wait for warp scans to complete (because s_Data is being
         // overwritten)
         __syncthreads();
 
-        if ( (threadIndex & (WARP_SIZE - 1)) == (WARP_SIZE - 1) )
-            sScratch[threadIndex >> LOG2_WARP_SIZE] = warpResult;
+        if ( (threadIndex & (WARP_SIZE - 1)) == (WARP_SIZE - 1) ) {
+            sDecayScratch[threadIndex >> LOG2_WARP_SIZE] = warpResultDecay;
+            sImpulseScratch[threadIndex >> LOG2_WARP_SIZE] = warpImpulseDecay;
+        }
 
         // wait for warp scans to complete
         __syncthreads();
 
         if ( threadIndex < (SCAN_BLOCK_DIM / WARP_SIZE)) {
             // grab top warp elements
-            uint val = sScratch[threadIndex];
+            float decay_val = sDecayScratch[threadIndex];
+            float impulse_val = sImpulseScratch[threadIndex];
             // calculate exclusive scan and write back to shared memory
-            sScratch[threadIndex] = warpScanExclusive(threadIndex, val, sScratch, size >> LOG2_WARP_SIZE);
+            warpScanInclusive(threadIndex, decay_val, impulse_val,
+                sDecayScratch, sImpulseScratch,
+                &sDecayScratch[threadIndex + 1], &sImpulseScratch[threadIndex + 1], 
+                size >> LOG2_WARP_SIZE);
         }
 
         //return updated warp scans with exclusive scan results
         __syncthreads();
-
-        sOutput[threadIndex] = warpResult + sScratch[threadIndex >> LOG2_WARP_SIZE] - idata;
+        sInputImpulses[threadIndex] = (warpResultImpulse * sDecayScratch[threadIndex >> LOG2_WARP_SIZE]
+            + sImpulseScratch[threadIndex >> LOG2_WARP_SIZE]);
+        sInputDecays[threadIndex] = warpResultDecay * sDecayScratch[threadIndex >> LOG2_WARP_SIZE];
 
     } else if (threadIndex < WARP_SIZE) {
-        uint idata = sInput[threadIndex];
-        sOutput[threadIndex] = warpScanExclusive(threadIndex, idata, sScratch, size);
+        float decay_data = sInputDecays[threadIndex];
+        float impulse_data = sInputImpulses[threadIndex];
+        sOutput[threadIndex] = warpScanInclusive(threadIndex, decay_data, impulse_data,
+            sDecayScratch, sImpulseScratch,
+            &sInputDecays[threadIndex], &sInputImpulses[threadIndex], size);
     }
 }
