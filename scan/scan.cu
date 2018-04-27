@@ -272,10 +272,15 @@ void printCudaInfo()
         cudaDeviceProp deviceProps;
         cudaGetDeviceProperties(&deviceProps, i);
         printf("Device %d: %s\n", i, deviceProps.name);
-        printf("   SMs:        %d\n", deviceProps.multiProcessorCount);
-        printf("   Global mem: %.0f MB\n",
+        printf("    SMs:        %d\n", deviceProps.multiProcessorCount);
+        printf("    CUDA Cap version:   %d.%d\n", deviceProps.major, deviceProps.minor);
+        printf("    Total registers per block:     %d\n", deviceProps.regsPerBlock);
+        printf("    Warp size:                     %d\n", deviceProps.warpSize);
+        printf("    Global mem: %.0f MB\n",  
                static_cast<float>(deviceProps.totalGlobalMem) / (1024 * 1024));
-        printf("   CUDA Cap:   %d.%d\n", deviceProps.major, deviceProps.minor);
+        printf("    Total amount of shared memory per block: %zu Bytes\n", deviceProps.sharedMemPerBlock);
+        printf("    Maximum memory pitch:          %zu Bytes\n", deviceProps.memPitch);
+        printf("    Total amount of constant memory:         %zu Bytes\n",   deviceProps.totalConstMem);
     }
     printf("---------------------------------------------------------\n"); 
 }
