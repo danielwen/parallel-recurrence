@@ -1,9 +1,9 @@
 #include <assert.h>
 #include <stdio.h>
 
-#define SCAN_ARRS_PER_BLK 6 // TODO: change once scan is inline
+#define SCAN_ARRS_PER_BLK 8 // TODO: change once scan is inline
 #define SCAN_BLOCK_DIM 256
-#include "exclusiveScan.cu_inl"
+#include "recurrentScan.cu_inl"
 
 #define CEIL_DIV(x, y) ((x + y - 1) / y)
 
@@ -122,8 +122,6 @@ __global__ void block_scan_kernel_fast(float *decay_storage, float *h_storage,
    */
   __shared__ float decay_arrays[SCAN_ARRS_PER_BLK * SCAN_BLOCK_DIM];
   __shared__ float impulse_arrays[SCAN_ARRS_PER_BLK * SCAN_BLOCK_DIM];
-  __shared__ float decay_out[SCAN_ARRS_PER_BLK * SCAN_BLOCK_DIM];
-  __shared__ float impulse_out[SCAN_ARRS_PER_BLK * SCAN_BLOCK_DIM];
   __shared__ float decay_scratch[2 * SCAN_ARRS_PER_BLK * SCAN_BLOCK_DIM];
   __shared__ float impulse_scratch[2 * SCAN_ARRS_PER_BLK * SCAN_BLOCK_DIM];
 
@@ -148,8 +146,8 @@ __global__ void block_scan_kernel_fast(float *decay_storage, float *h_storage,
     int array_start = which_array * SCAN_BLOCK_DIM;
     float *decays_start = &decay_arrays[array_start];
     float *impulses_start = &impulse_arrays[array_start];
-    int curr_thread = blockDim.x * blockIdx.x + threadIdx.x;
-    sharedMemRecurrentExclusiveScan(curr_thread, decays_start, impulses_start, decay_out, impulse_out, decay_scratch, impulse_scratch, SCAN_BLOCK_DIM);
+    sharedMemRecurrentInclusiveScan(threadIdx.x, decays_start, impulses_start,
+      decay_scratch, impulse_scratch, SCAN_BLOCK_DIM);
   }
 
   __syncthreads();
@@ -159,8 +157,8 @@ __global__ void block_scan_kernel_fast(float *decay_storage, float *h_storage,
     for (int i = 0; i < n_arrs; i++) {
       int storage_idx = storage_offset + i;
       int array_idx = i * n_reduced_blocks + threadIdx.x;
-      decay_storage[storage_idx] = decay_out[array_idx];
-      h_storage[storage_idx] = impulse_out[array_idx];
+      decay_storage[storage_idx] = decay_arrays[array_idx];
+      h_storage[storage_idx] = impulse_arrays[array_idx];
     }
   }
 
