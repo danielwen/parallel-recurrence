@@ -4,51 +4,11 @@
 #define SCAN_ARRS_PER_BLK 8 // TODO: change once scan is inline
 #define SCAN_BLOCK_DIM 256
 #include "recurrentScan.cu_inl"
+#include "linear_recurrence_h.cuh"
 
 #define CEIL_DIV(x, y) ((x + y - 1) / y)
 
 #define gpuErrChk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
-void gpuAssert(cudaError_t code, const char *file, int line);
-
-__device__ int2 divide_work(int n_jobs, int n_workers, int worker_idx) {
-  // Each worker will do a continuous slice of either n_jobs / n_workers
-  // or ceil_div(n_jobs, n_workers). The return value is an int2 representing
-  // a half open interval of jobs for the worker to perform (perform jobs
-  // i for a <= i < b)
-
-  int cd = CEIL_DIV(n_jobs, n_workers);
-  int d = n_jobs / n_workers;
-
-  int doing_cd = n_jobs % n_workers;
-
-  int2 retval;
-  if (worker_idx < doing_cd) {
-    retval.x = worker_idx * cd;
-    retval.y = retval.x + cd;
-  } else {
-    retval.x = doing_cd * cd + (worker_idx - doing_cd) * d;
-    retval.y = retval.x + d;
-  }
-
-  return retval;
-}
-
-__device__ int2 compute_warp_start_stop(int block_idx, int warp_idx,
-					int n_blocks, int n_steps) {
-  int2 block_ss = divide_work(n_steps, n_blocks, block_idx);
-  int block_start = block_ss.x;
-  int block_stop = block_ss.y;
-  int block_jobs = block_stop - block_start;
-
-  int2 warp_ss = divide_work(block_jobs, 32, warp_idx);
-  int warp_start = block_start + warp_ss.x;
-  int warp_stop = block_start + warp_ss.y;
-
-  int2 retval;
-  retval.x = warp_start;
-  retval.y = warp_stop;
-  return retval;
-}
 
 // decay storage, h_storage:
 //   each a n_dims x 33 x n_blocks matrix on GPU with 33rd column for block reduction
@@ -135,7 +95,10 @@ __global__ void block_scan_kernel_fast(float *decay_storage, float *h_storage,
       int array_idx = i * SCAN_BLOCK_DIM + threadIdx.x;
       decay_arrays[array_idx] = decay_storage[storage_idx];
       impulse_arrays[array_idx] = h_storage[storage_idx];
-      scratch_arrays[array_idx] = 0; // TODO: remove line once code is correct
+
+      // TODO: remove these 2 lines once code is correct
+      decay_scratch[array_idx] = 0; 
+      impulse_scratch[array_idx] = 0;
     }
   }
 
@@ -277,7 +240,7 @@ void compute_fast_linear_recurrence(float *decays, float *impulses, float *initi
 }
 }
 
-void test() {
+void test_fast() {
   int n_dims = 100;
   int n_steps = 1000000;
   int n_elements = n_dims * n_steps;

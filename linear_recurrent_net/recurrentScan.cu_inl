@@ -52,7 +52,7 @@
 inline __device__ void
 warpScanInclusive(int threadIndex, float decay_data, float impulse_data,
     volatile float *sDecayScratch, volatile float *sImpulseScratch,
-    float *resultDecay, float *resultImpulse, uint size){
+    volatile float *resultDecay, volatile float *resultImpulse, uint size){
     // Note some of the calculations are obscure because they are optimized.
     // For example, (threadIndex & (size - 1)) computes threadIndex % size,
     // which works, assuming size is a power of 2.
@@ -96,7 +96,7 @@ sharedMemRecurrentInclusiveScan(int threadIndex, float* sInputDecays, float* sIn
 
         if ( (threadIndex & (WARP_SIZE - 1)) == (WARP_SIZE - 1) ) {
             sDecayScratch[threadIndex >> LOG2_WARP_SIZE] = warpResultDecay;
-            sImpulseScratch[threadIndex >> LOG2_WARP_SIZE] = warpImpulseDecay;
+            sImpulseScratch[threadIndex >> LOG2_WARP_SIZE] = warpResultImpulse;
         }
 
         // wait for warp scans to complete
@@ -122,8 +122,9 @@ sharedMemRecurrentInclusiveScan(int threadIndex, float* sInputDecays, float* sIn
     } else if (threadIndex < WARP_SIZE) {
         float decay_data = sInputDecays[threadIndex];
         float impulse_data = sInputImpulses[threadIndex];
-        sOutput[threadIndex] = warpScanInclusive(threadIndex, decay_data, impulse_data,
+        warpScanInclusive(threadIndex, decay_data, impulse_data,
             sDecayScratch, sImpulseScratch,
             &sInputDecays[threadIndex], &sInputImpulses[threadIndex], size);
+
     }
 }
