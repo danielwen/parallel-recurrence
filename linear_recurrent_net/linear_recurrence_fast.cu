@@ -10,12 +10,45 @@
 #define gpuErrChk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 void gpuAssert(cudaError_t code, const char *file, int line);
 
-__inline__ __device__ void sharedMemExclusiveScan(float* decays, float* impulses, int size);
+__device__ int2 divide_work(int n_jobs, int n_workers, int worker_idx) {
+  // Each worker will do a continuous slice of either n_jobs / n_workers
+  // or ceil_div(n_jobs, n_workers). The return value is an int2 representing
+  // a half open interval of jobs for the worker to perform (perform jobs
+  // i for a <= i < b)
 
-__device__ int2 divide_work(int n_jobs, int n_workers, int worker_idx);
+  int cd = CEIL_DIV(n_jobs, n_workers);
+  int d = n_jobs / n_workers;
+
+  int doing_cd = n_jobs % n_workers;
+
+  int2 retval;
+  if (worker_idx < doing_cd) {
+    retval.x = worker_idx * cd;
+    retval.y = retval.x + cd;
+  } else {
+    retval.x = doing_cd * cd + (worker_idx - doing_cd) * d;
+    retval.y = retval.x + d;
+  }
+
+  return retval;
+}
 
 __device__ int2 compute_warp_start_stop(int block_idx, int warp_idx,
-          int n_blocks, int n_steps);
+					int n_blocks, int n_steps) {
+  int2 block_ss = divide_work(n_steps, n_blocks, block_idx);
+  int block_start = block_ss.x;
+  int block_stop = block_ss.y;
+  int block_jobs = block_stop - block_start;
+
+  int2 warp_ss = divide_work(block_jobs, 32, warp_idx);
+  int warp_start = block_start + warp_ss.x;
+  int warp_stop = block_start + warp_ss.y;
+
+  int2 retval;
+  retval.x = warp_start;
+  retval.y = warp_stop;
+  return retval;
+}
 
 // decay storage, h_storage:
 //   each a n_dims x 33 x n_blocks matrix on GPU with 33rd column for block reduction
