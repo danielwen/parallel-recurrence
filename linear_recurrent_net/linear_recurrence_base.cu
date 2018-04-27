@@ -235,7 +235,7 @@ void compute_linear_recurrence_baseline(float *decays, float *impulses, float *i
 			       float *out, int n_dims, int n_steps) {
 
   // TODO: query
-  int n_SMs = 15;
+  int n_SMs = 13;
   int n_blocks_per_sm = 2;
 
   // we want at least 32 elements per block, but no reason to run

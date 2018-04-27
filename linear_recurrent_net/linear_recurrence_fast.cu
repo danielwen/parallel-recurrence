@@ -1,9 +1,9 @@
 #include <assert.h>
 #include <stdio.h>
-// #include "exclusiveScan.cu_inl"
 
-#define SCAN_ARRS_PER_BLK 24
+#define SCAN_ARRS_PER_BLK 6 // TODO: change once scan is inline
 #define SCAN_BLOCK_DIM 256
+#include "exclusiveScan.cu_inl"
 
 #define CEIL_DIV(x, y) ((x + y - 1) / y)
 
@@ -122,6 +122,10 @@ __global__ void block_scan_kernel_fast(float *decay_storage, float *h_storage,
    */
   __shared__ float decay_arrays[SCAN_ARRS_PER_BLK * SCAN_BLOCK_DIM];
   __shared__ float impulse_arrays[SCAN_ARRS_PER_BLK * SCAN_BLOCK_DIM];
+  __shared__ float decay_out[SCAN_ARRS_PER_BLK * SCAN_BLOCK_DIM];
+  __shared__ float impulse_out[SCAN_ARRS_PER_BLK * SCAN_BLOCK_DIM];
+  __shared__ float decay_scratch[2 * SCAN_ARRS_PER_BLK * SCAN_BLOCK_DIM];
+  __shared__ float impulse_scratch[2 * SCAN_ARRS_PER_BLK * SCAN_BLOCK_DIM];
 
   int n_arrs = min(SCAN_ARRS_PER_BLK, n_dims - blockIdx.x * SCAN_ARRS_PER_BLK);
   int storage_offset = threadIdx.x * n_dims + blockIdx.x * SCAN_ARRS_PER_BLK;
@@ -133,6 +137,7 @@ __global__ void block_scan_kernel_fast(float *decay_storage, float *h_storage,
       int array_idx = i * SCAN_BLOCK_DIM + threadIdx.x;
       decay_arrays[array_idx] = decay_storage[storage_idx];
       impulse_arrays[array_idx] = h_storage[storage_idx];
+      scratch_arrays[array_idx] = 0; // TODO: remove line once code is correct
     }
   }
 
@@ -143,7 +148,8 @@ __global__ void block_scan_kernel_fast(float *decay_storage, float *h_storage,
     int array_start = which_array * SCAN_BLOCK_DIM;
     float *decays_start = &decay_arrays[array_start];
     float *impulses_start = &impulse_arrays[array_start];
-    sharedMemExclusiveScan(decays_start, impulses_start, SCAN_BLOCK_DIM);
+    int curr_thread = blockDim.x * blockIdx.x + threadIdx.x;
+    sharedMemRecurrentExclusiveScan(curr_thread, decays_start, impulses_start, decay_out, impulse_out, decay_scratch, impulse_scratch, SCAN_BLOCK_DIM);
   }
 
   __syncthreads();
@@ -153,8 +159,8 @@ __global__ void block_scan_kernel_fast(float *decay_storage, float *h_storage,
     for (int i = 0; i < n_arrs; i++) {
       int storage_idx = storage_offset + i;
       int array_idx = i * n_reduced_blocks + threadIdx.x;
-      decay_storage[storage_idx] = decay_arrays[array_idx];
-      h_storage[storage_idx] = impulse_arrays[array_idx];
+      decay_storage[storage_idx] = decay_out[array_idx];
+      h_storage[storage_idx] = impulse_out[array_idx];
     }
   }
 
@@ -240,7 +246,7 @@ void compute_fast_linear_recurrence(float *decays, float *impulses, float *initi
              float *out, int n_dims, int n_steps) {
 
   // TODO: query
-  int n_SMs = 15;
+  int n_SMs = 13;
   int n_blocks_per_sm = 16;
 
   // we want at least 32 elements per block, but no reason to run
