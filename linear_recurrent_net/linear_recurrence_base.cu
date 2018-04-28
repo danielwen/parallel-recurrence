@@ -1,6 +1,6 @@
 #include <assert.h>
 #include <stdio.h>
-#include "linear_recurrence_h.cuh"
+// #include "linear_recurrence_h.cuh"
 
 #define CEIL_DIV(x, y) ((x + y - 1) / y)
 

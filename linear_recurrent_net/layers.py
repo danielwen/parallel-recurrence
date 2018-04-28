@@ -122,7 +122,8 @@ def SRU(X, alg, name='SRU'):
         elif alg == Alg.BASELINE:
             c = linear_recurrence_baseline(f, (1 - f) * x_tilde)
         elif alg == Alg.FAST:
-            c = fast_linear_recurrence(f, i * z)
+            print("Using (our) fast linear recurrence")
+            c = fast_linear_recurrence(f, (1 - f) * x_tilde)
         
         h = r * c + (1 - r) * X
         return h
@@ -152,7 +153,7 @@ def QRNN(X, n, alg, name='qrnn'):
         elif alg == Alg.BASELINE:
             c = linear_recurrence_baseline(f, (1 - f) * z)
         elif alg == Alg.FAST:
-            c = fast_linear_recurrence(f, i * z)
+            c = fast_linear_recurrence(f, (1 - f) * z)
 
         h = o * c
         return h  
