@@ -1,8 +1,9 @@
 import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
-from linear_recurrent_net.layers import Alg   
+from linear_recurrent_net.layers import linear_surrogate_lstm, SRU, QRNN, Alg
+import argparse 
 
-def plr_slr(bs_seq_len_list):
+def plr_slr(bs_seq_len_list, alg):
     """Given a list of pairs (batch size, seq_len), 
     calculate the throughput of an LS-LSTM, an SRU, a QRNN(2),
     and QRNN(10) using the parallel kernel as opposed to the serial
@@ -14,8 +15,6 @@ def plr_slr(bs_seq_len_list):
     import math
     import os
     import sys
-    # sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
-    from linear_recurrent_net.layers import linear_surrogate_lstm, SRU, QRNN, Alg            
     import time
     import os
     import random
@@ -55,8 +54,8 @@ def plr_slr(bs_seq_len_list):
                              tf.random_normal([n_hidden, n_classes]), dtype='float')
         b1 = tf.get_variable('b1', initializer=tf.zeros([n_classes]), dtype='float')
 
-        layer1 = linear_surrogate_lstm(x, n_hidden, alg=Alg.BASELINE, name='ls-lstm')
-        outputs = linear_surrogate_lstm(layer1, n_hidden, alg=Alg.BASELINE, name='ls-lstm2')    
+        layer1 = linear_surrogate_lstm(x, n_hidden, alg=alg, name='ls-lstm')
+        outputs = linear_surrogate_lstm(layer1, n_hidden, alg=alg, name='ls-lstm2')    
         pred = tf.matmul(outputs[-1], W1) + b1
         #Evaluate network, run adam and clip gradients
         ################################################################################
@@ -136,8 +135,8 @@ def plr_slr(bs_seq_len_list):
         W1 = tf.get_variable('W1', initializer=
                              tf.random_normal([n_input, n_classes]), dtype='float')
         b1 = tf.get_variable('b1', initializer=tf.zeros([n_classes]), dtype='float')
-        layer1 = SRU(x, alg=Alg.BASELINE, name='SRU_1')
-        output = SRU(layer1, alg=Alg.BASELINE, name='SRU_2')
+        layer1 = SRU(x, alg=alg, name='SRU_1')
+        output = SRU(layer1, alg=alg, name='SRU_2')
         pred = tf.matmul(output[-1], W1) + b1        
 
         #Evaluate network, run adam and clip gradients
@@ -216,8 +215,8 @@ def plr_slr(bs_seq_len_list):
         W1 = tf.get_variable('W1', initializer=
                              tf.random_normal([n_input, n_classes]), dtype='float')
         b1 = tf.get_variable('b1', initializer=tf.zeros([n_classes]), dtype='float')
-        layer1 = QRNN(x, 2, alg=Alg.BASELINE, name='QRNN_1')
-        output = QRNN(layer1, 2, alg=Alg.BASELINE, name='QRNN_2')
+        layer1 = QRNN(x, 2, alg=alg, name='QRNN_1')
+        output = QRNN(layer1, 2, alg=alg, name='QRNN_2')
         pred = tf.matmul(output[-1], W1) + b1
 
         #Evaluate network, run adam and clip gradients
@@ -299,8 +298,8 @@ def plr_slr(bs_seq_len_list):
         W1 = tf.get_variable('W1', initializer=
                              tf.random_normal([n_input, n_classes]), dtype='float')
         b1 = tf.get_variable('b1', initializer=tf.zeros([n_classes]), dtype='float')
-        layer1 = QRNN(x, 10, alg=Alg.BASELINE, name='QRNN_2')
-        output = QRNN(layer1, 10, alg=Alg.BASELINE, name='QRNN_6')
+        layer1 = QRNN(x, 10, alg=alg, name='QRNN_2')
+        output = QRNN(layer1, 10, alg=alg, name='QRNN_6')
         pred = tf.matmul(output[-1], W1) + b1
 
         #Evaluate network, run adam and clip gradients
@@ -377,27 +376,77 @@ def plr_slr(bs_seq_len_list):
                                 qrnn_10_tp, s_qrnn_10_tp])
     return throughput_list
 
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--alg', help="One of {baseline,fast}", type=str)
+    parser.add_argument('--num-iters', help="Number of runs to average results over", type=int, default=1)
+
+    args = parser.parse_args()
+    return args 
+
 if __name__ == "__main__":
+
+    args = parse_args()
+
     import numpy as np
     seq_len_list = [16 ** x for x in range(1, 5)]    
+    num_seqs = len(seq_len_list)
 
-    alg_name = sys.argv[1]
+    alg_name = args.alg
+    num_iters = args.num_iters 
+
     if alg_name == "baseline":
         alg = Alg.BASELINE
     elif alg_name == "fast":
         alg = Alg.FAST
+    else:
+        print("|", alg_name, "|")
+        raise ValueError("Invalid algorithm type, use one of {baseline, fast}")
 
-    out = plr_slr(seq_len_list, alg=alg)
-    print(type(out))
-    print(len(out))
-    p_ls_lstm, s_ls_lstm, p_sru, s_sru, p_2_qrnn, s_2_qrnn, p_10_qrnn, s_10_qrnn = zip(*out)
-    # p_ls_lstm, s_ls_lstm = zip(*out)
-    print("Throughput ratios (P/S)")
-    print("LS LSTM", np.array(p_ls_lstm) / np.array(s_ls_lstm))
-    print("SRU: ", np.array(p_sru) / np.array(s_sru))
-    print("QRNN (filter_size=2): ", np.array(p_2_qrnn) / np.array(s_2_qrnn))
-    print("QRNN (filter_size=10)", np.array(p_10_qrnn) / np.array(s_10_qrnn)
-)
+
+    throughputs = {
+        "p_ls_lstm": np.zeros(len(seq_len_list)), 
+        "s_ls_lstm": np.zeros(len(seq_len_list)),
+        "p_sru": np.zeros(len(seq_len_list)),
+        "s_sru": np.zeros(len(seq_len_list)),
+        "p_2_qrnn": np.zeros(len(seq_len_list)),
+        "s_2_qrnn": np.zeros(len(seq_len_list)),
+        "p_10_qrnn": np.zeros(len(seq_len_list)),
+        "s_10_qrnn": np.zeros(len(seq_len_list)) 
+        } 
+
+    for _ in range(num_iters):
+        out = plr_slr(seq_len_list, alg=alg)
+
+        print(type(out))
+        print(len(out))
+        p_ls_lstm, s_ls_lstm, p_sru, s_sru, p_2_qrnn, s_2_qrnn, p_10_qrnn, s_10_qrnn = zip(*out)
+
+        throughputs["p_ls_lstm"] += np.array(p_ls_lstm)
+        throughputs["s_ls_lstm"] += np.array(s_ls_lstm)
+        throughputs["p_sru"] += np.array(p_sru)
+        throughputs["s_sru"] += np.array(s_sru)
+        throughputs["p_2_qrnn"] += np.array(p_2_qrnn)
+        throughputs["s_2_qrnn"] += np.array(s_2_qrnn)
+        throughputs["p_10_qrnn"] += np.array(p_10_qrnn)
+        throughputs["s_10_qrnn"] += np.array(s_10_qrnn)
+
+        # p_ls_lstm, s_ls_lstm = zip(*out)
+        print("Throughput ratios (P/S) ", alg_name)
+        print("LS LSTM", np.array(p_ls_lstm) / np.array(s_ls_lstm))
+        print("SRU: ", np.array(p_sru) / np.array(s_sru))
+        print("QRNN (filter_size=2): ", np.array(p_2_qrnn) / np.array(s_2_qrnn))
+        print("QRNN (filter_size=10)", np.array(p_10_qrnn) / np.array(s_10_qrnn))
+
+
+
+    print("\n\n\n")
+    print("AVERAGE (over {} runs) Throughput ratios (P/S) ".format(num_iters), alg_name)
+    print("LS LSTM", throughputs["p_ls_lstm"] / throughputs["s_ls_lstm"])
+    print("SRU: ", throughputs["p_sru"] / throughputs["s_sru"])
+    print("QRNN (filter_size=2): ", throughputs["p_2_qrnn"] / throughputs["s_2_qrnn"])
+    print("QRNN (filter_size=10)", throughputs["p_10_qrnn"] / throughputs["s_10_qrnn"])
+
 
 
     # in_list1 = [[1, x] for x in [2**z for z in range(8, 19-1)]]
