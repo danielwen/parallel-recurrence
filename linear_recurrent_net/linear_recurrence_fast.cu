@@ -269,20 +269,33 @@ void compute_fast_linear_recurrence(float *decays, float *impulses, float *initi
   float *d_h_storage = &d_reduction_mem[1 * n_blocks * 33 * n_dims];
 
   // TODO: run kernels on non-default stream?
+  double reduce_start = CycleTimer::currentSeconds();
   reduction_kernel_fast<<<n_blocks, 1024>>>(decays, impulses, initial_state,
                d_decay_storage, d_h_storage,
                n_dims, n_steps);
+  double reduce_end = CycleTimer::currentSeconds();
 
+  double scan_start = CycleTimer::currentSeconds();
   int n_scan_blocks = (n_dims + SCAN_ARRS_PER_BLK - 1) / SCAN_ARRS_PER_BLK;
   block_scan_kernel_fast<<<n_scan_blocks, SCAN_BLOCK_DIM>>>(d_decay_storage, d_h_storage,
           n_dims, n_blocks);
+  double scan_end = CycleTimer::currentSeconds();
 
+  double expand_start = CycleTimer::currentSeconds();
   warp_scan_kernel_fast<<<n_blocks, 1024>>>(decays, impulses,
                initial_state, out,
                d_decay_storage, d_h_storage,
                n_dims, n_steps);
+  double expand_end = CycleTimer::currentSeconds();
 
   gpuErrChk(cudaFree(d_reduction_mem));
+
+  #if DEBUG
+  printf("Reduce: %.4f ms\n", 1000.f * (reduce_end - reduce_start));
+  printf("Scan: %.4f ms\n", 1000.f * (scan_end - scan_start));
+  printf("Expand: %.4f ms\n", 1000.f * (expand_end - expand_start));
+  printf("\n");
+  #endif
 }
 }
 

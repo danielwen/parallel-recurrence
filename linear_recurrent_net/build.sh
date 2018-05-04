@@ -1,11 +1,11 @@
 #! /bin/sh
 rm -rf lib/
 
-if [ "$(echo $DEBUG)" == "" ]; then DEBUG=0; fi
+if [ "$DEBUG" == "" ]; then DEBUG=0; fi
 
 mkdir lib
 nvcc -c linear_recurrence_base.cu -o lib/linear_recurrence_base.o -DDEBUG=$DEBUG -O3 --compiler-options '-fPIC' # --device-c
-nvcc -c linear_recurrence_fast.cu -o lib/linear_recurrence_fast.o -O3 --compiler-options '-fPIC' # --device-c
+nvcc -c linear_recurrence_fast.cu -o lib/linear_recurrence_fast.o -DDEBUG=$DEBUG -O3 --compiler-options '-fPIC' # --device-c
 nvcc lib/linear_recurrence_base.o lib/linear_recurrence_fast.o -shared -o lib/liblinear_recurrence.so --compiler-options '-fPIC' # -rdc=true
 
 # building tensorflow op
