@@ -82,8 +82,11 @@ def linear_surrogate_lstm(X, hidden_size, alg, name='lin_sur_lstm'):
     with vscope(name):
         # 2 * hidden_size * n_dims params
         # original code used the baseline for both serial and regular ls lstm
-        h_tilde = gilr_layer(X, hidden_size, alg=Alg.BASELINE, nonlin=tf.tanh) 
-
+        if alg == Alg.BASELINE or alg == Alg.SERIAL_BASELINE:
+            h_tilde = gilr_layer(X, hidden_size, alg=Alg.BASELINE, nonlin=tf.tanh) 
+        elif alg == Alg.FAST:
+            h_tilde = gilr_layer(X, hidden_size, alg=Alg.FAST, nonlin=tf.tanh) 
+         
         # 4 * hidden_size * (hidden_size + n_dims)
         preact = fc_layer(tf.concat([h_tilde, X], axis=-1), 4 * hidden_size,
                           nonlin=tf.identity, name='pre_fc')
