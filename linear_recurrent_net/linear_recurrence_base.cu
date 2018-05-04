@@ -273,10 +273,13 @@ void compute_linear_recurrence_baseline(float *decays, float *impulses, float *i
   double expand_end = CycleTimer::currentSeconds();
 
   gpuErrChk(cudaFree(d_reduction_mem));
-
+  
+  #if DEBUG
   printf("Reduce: %.4f ms\n", 1000.f * (reduce_end - reduce_start));
   printf("Scan: %.4f ms\n", 1000.f * (scan_end - scan_start));
   printf("Expand: %.4f ms\n", 1000.f * (expand_end - expand_start));
+  printf("\n");
+  #endif
 }
 
 void compute_serial_linear_recurrence_baseline(float *decays, float *impulses,
