@@ -26,3 +26,7 @@ void compute_serial_linear_recurrence_baseline(
   int n_steps                   /* length of input and output sequences */
 );
 }
+
+void test_fast();
+void test_base();
+

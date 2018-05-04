@@ -254,23 +254,35 @@ void compute_linear_recurrence_baseline(float *decays, float *impulses, float *i
 
   // TODO: run kernels on non-default stream?
 
+  #if DEBUG
   double reduce_start = CycleTimer::currentSeconds();
+  #endif
   reduction_kernel_baseline<<<n_blocks, 1024>>>(decays, impulses, initial_state,
 				       d_decay_storage, d_h_storage,
 				       n_dims, n_steps);
+  #if DEBUG
   double reduce_end = CycleTimer::currentSeconds();
+  #endif
   
+  #if DEBUG
   double scan_start = CycleTimer::currentSeconds();
+  #endif
   block_scan_kernel_baseline<<<n_blocks, 1024>>>(d_decay_storage, d_h_storage,
 					n_dims, n_blocks);
+  #if DEBUG
   double scan_end = CycleTimer::currentSeconds();
+  #endif
 
+  #if DEBUG
   double expand_start = CycleTimer::currentSeconds();
+  #endif
   warp_scan_kernel_baseline<<<n_blocks, 1024>>>(decays, impulses,
 				       initial_state, out,
 				       d_decay_storage, d_h_storage,
 				       n_dims, n_steps);
+  #if DEBUG
   double expand_end = CycleTimer::currentSeconds();
+  #endif
 
   gpuErrChk(cudaFree(d_reduction_mem));
   
@@ -296,14 +308,14 @@ void compute_serial_linear_recurrence_baseline(float *decays, float *impulses,
 }
 }
 
-void test() {
-  int n_dims = 100;
-  int n_steps = 1000000;
+void test_base() {
+  int n_dims = 2; //100;
+  int n_steps = 10; //1000000;
   int n_elements = n_dims * n_steps;
 
   float *decays = (float *) calloc(n_elements, sizeof(float));
   for (int i = 0; i < n_elements; i++) {
-    decays[i] = .999;
+    decays[i] = .9;
   }
   float *d_decays;
   gpuErrChk(cudaMalloc(&d_decays, n_elements * sizeof(float)));
@@ -314,6 +326,13 @@ void test() {
   for (int i = 0; i < n_dims; i++) {
     impulses[i + 0 * n_dims] = 2.0;
   }
+
+  printf("\n(decays, impulses): ");
+  for(int i=0; i<n_elements; i++)
+  {
+    printf("(%f,%f) ", decays[i], impulses[i]);
+  }
+
   float *d_impulses;
   gpuErrChk(cudaMalloc(&d_impulses, n_elements * sizeof(float)));
   gpuErrChk(cudaMemcpy(d_impulses, impulses,
@@ -327,6 +346,13 @@ void test() {
   compute_linear_recurrence_baseline(d_decays, d_impulses, NULL, d_out, n_dims, n_steps);
   gpuErrChk(cudaMemcpy(out, d_out, n_elements * sizeof(float),
 		       cudaMemcpyDeviceToHost));
+
+
+  printf("\nSerial: ");
+  for(int i=0; i<n_elements; i++)
+  {
+    printf("%f ", out[i]);
+  }
 
   gpuErrChk(cudaFree(d_decays));
   gpuErrChk(cudaFree(d_impulses));
