@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stdio.h>
+#include "cycleTimer.h"
 
 #define SCAN_ARRS_PER_BLK 8 // TODO: change once scan is inline
 #define SCAN_BLOCK_DIM 256
@@ -291,6 +292,7 @@ void compute_fast_linear_recurrence(float *decays, float *impulses, float *initi
   gpuErrChk(cudaFree(d_reduction_mem));
 
   #if DEBUG
+  printf("FAST\n");
   printf("Reduce: %.4f ms\n", 1000.f * (reduce_end - reduce_start));
   printf("Scan: %.4f ms\n", 1000.f * (scan_end - scan_start));
   printf("Expand: %.4f ms\n", 1000.f * (expand_end - expand_start));

@@ -389,7 +389,7 @@ if __name__ == "__main__":
     args = parse_args()
 
     import numpy as np
-    seq_len_list = [16 ** x for x in range(1, 5)]    
+    seq_len_list = [65536] # [16 ** x for x in range(1, 5)]    
     num_seqs = len(seq_len_list)
 
     alg_name = args.alg
