@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stdio.h>
+#include "cycleTimer.h"
 // #include "linear_recurrence_h.cuh"
 
 #define CEIL_DIV(x, y) ((x + y - 1) / y)
@@ -252,26 +253,37 @@ void compute_linear_recurrence_baseline(float *decays, float *impulses, float *i
   float *d_h_storage = &d_reduction_mem[1 * n_blocks * 33 * n_dims];
 
   // TODO: run kernels on non-default stream?
+
+  double reduce_start = CycleTimer::currentSeconds();
   reduction_kernel_baseline<<<n_blocks, 1024>>>(decays, impulses, initial_state,
 				       d_decay_storage, d_h_storage,
 				       n_dims, n_steps);
-
+  double reduce_end = CycleTimer::currentSeconds();
+  
+  double scan_start = CycleTimer::currentSeconds();
   block_scan_kernel_baseline<<<n_blocks, 1024>>>(d_decay_storage, d_h_storage,
 					n_dims, n_blocks);
+  double scan_end = CycleTimer::currentSeconds();
 
+  double expand_start = CycleTimer::currentSeconds();
   warp_scan_kernel_baseline<<<n_blocks, 1024>>>(decays, impulses,
 				       initial_state, out,
 				       d_decay_storage, d_h_storage,
 				       n_dims, n_steps);
+  double expand_end = CycleTimer::currentSeconds();
 
   gpuErrChk(cudaFree(d_reduction_mem));
+
+  printf("Reduce: %.4f ms\n", 1000.f * (reduce_end - reduce_start));
+  printf("Scan: %.4f ms\n", 1000.f * (scan_end - scan_start));
+  printf("Expand: %.4f ms\n", 1000.f * (expand_end - expand_start));
 }
 
 void compute_serial_linear_recurrence_baseline(float *decays, float *impulses,
                                       float *initial_state, float *out,
                                       int n_dims, int n_steps) {
   // TODO: query
-  int n_SMs = 15;
+  int n_SMs = 13;
   int n_blocks_per_sm = 2;
 
   int n_blocks = n_SMs * n_blocks_per_sm;
