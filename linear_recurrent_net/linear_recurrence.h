@@ -27,6 +27,6 @@ void compute_serial_linear_recurrence_baseline(
 );
 }
 
-void test_fast();
-void test_base();
+float* test_fast(int n_dims, int n_steps);
+float* test_base(int n_dims, int n_steps);
 

@@ -5,7 +5,7 @@
 #define SCAN_ARRS_PER_BLK 8 
 #define SCAN_BLOCK_DIM 256
 #include "recurrentScan.cu_inl"
-#include "linear_recurrence.h"
+// #include "linear_recurrence.h"
 // #include "linear_recurrence_h.cuh"
 
 #include <cuda.h>
@@ -144,10 +144,9 @@ __global__ void block_scan_kernel_fast(float *decay_storage, float *h_storage,
     for (int i = 0; i < n_arrs; i++) {
       int storage_idx = storage_offset + i;
       int array_idx = i * SCAN_BLOCK_DIM + threadIdx.x;
+      // int array_idx = storage_idx;
       decay_arrays[array_idx] = decay_storage[storage_idx];
       impulse_arrays[array_idx] = h_storage[storage_idx];
-
-      printf("\nblockscankernelfast | thread %d: (%f, %f)", threadIdx.x, decay_arrays[array_idx], impulse_arrays[array_idx]);
 
       // TODO: remove these 2 lines once code is correct
       decay_scratch[array_idx] = 0; 
@@ -172,7 +171,7 @@ __global__ void block_scan_kernel_fast(float *decay_storage, float *h_storage,
   if (threadIdx.x < n_reduced_blocks) {
     for (int i = 0; i < n_arrs; i++) {
       int storage_idx = storage_offset + i;
-      int array_idx = i * n_reduced_blocks + threadIdx.x;
+      int array_idx = i * SCAN_BLOCK_DIM + threadIdx.x;
       decay_storage[storage_idx] = decay_arrays[array_idx];
       h_storage[storage_idx] = impulse_arrays[array_idx];
     }
@@ -236,14 +235,12 @@ __global__ void warp_scan_kernel_fast(float *decays, float *impulses,
     float h = 0.0;
     if (blockIdx.x == 0 && warp == 0) {
       if (initial_state != NULL) {
-        printf("initial state present**********************");
+        // printf("initial state present***********probably shouldn't be***********"); // should it be?
         h = initial_state[i];
       }
     } else {
       h = h_storage[i + (warp - 1) * n_dims + blockIdx.x * 33 * n_dims];
     }
-
-    printf("\nwithin warp scan | lane %d, initial h=%f", i, h);
 
     for (int t = warp_start; t < warp_stop; t++) {
       h = decays[i + t * n_dims] * h + impulses[i + t * n_dims];
@@ -252,7 +249,19 @@ __global__ void warp_scan_kernel_fast(float *decays, float *impulses,
   }
 }
 
-// extern "C" {
+__global__ void test_recurrent_scan() {
+
+
+
+  // sharedMemRecurrentInclusiveScan(threadIdx.x, decays_start, impulses_start,
+  //                                 decay_scratch, impulse_scratch, SCAN_BLOCK_DIM);
+
+
+
+
+}
+
+extern "C" {
 /*
  * This is the main method for the prefix sum kernels.
  * decays, impulses, out:
@@ -270,7 +279,7 @@ void compute_fast_linear_recurrence(float *decays, float *impulses, float *initi
   // we want at least 32 elements per block, but no reason to run
   // with more than the maximum number of concurrent blocks
   int n_blocks = min(CEIL_DIV(n_steps, 32), n_SMs * n_blocks_per_sm);
-  printf("\nfastlinrecurr : n_blocks: %d", n_blocks);
+  // printf("\nfastlinrecurr | n_blocks: %d\n", n_blocks);
 
   // TODO: make user pass in working memory? This allows integration
   //       with CNMeM (used by Theano)
@@ -295,6 +304,7 @@ void compute_fast_linear_recurrence(float *decays, float *impulses, float *initi
   double scan_start = CycleTimer::currentSeconds();
   #endif 
   int n_scan_blocks = (n_dims + SCAN_ARRS_PER_BLK - 1) / SCAN_ARRS_PER_BLK;
+  
   block_scan_kernel_fast<<<n_scan_blocks, SCAN_BLOCK_DIM>>>(d_decay_storage, d_h_storage,
           n_dims, n_blocks);
   #if DEBUG
@@ -322,11 +332,10 @@ void compute_fast_linear_recurrence(float *decays, float *impulses, float *initi
   printf("\n");
   #endif
 }
-// }
+}
 
-void test_fast() {
-  int n_dims = 2; //100;
-  int n_steps = 10; //1000000;
+float* test_fast(int n_dims, int n_steps) {
+  
   int n_elements = n_dims * n_steps;
 
   float *decays = (float *) calloc(n_elements, sizeof(float));
@@ -343,7 +352,7 @@ void test_fast() {
     impulses[i + 0 * n_dims] = 2.0;
   }
 
-  printf("\n(decays, impulses): ");
+  printf("\nInput (decays, impulses): ");
   for(int i=0; i<n_elements; i++)
   {
     printf("(%f,%f) ", decays[i], impulses[i]);
@@ -372,5 +381,7 @@ void test_fast() {
   gpuErrChk(cudaFree(d_decays));
   gpuErrChk(cudaFree(d_impulses));
   gpuErrChk(cudaFree(d_out));
-  free(out_fast);
+  // free(out_fast);
+
+  return out_fast;
 }

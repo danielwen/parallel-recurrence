@@ -308,9 +308,9 @@ void compute_serial_linear_recurrence_baseline(float *decays, float *impulses,
 }
 }
 
-void test_base() {
-  int n_dims = 2; //100;
-  int n_steps = 10; //1000000;
+float* test_base(int n_dims, int n_steps) {
+  // int n_dims = 2; //100;
+  // int n_steps = 10; //1000000;
   int n_elements = n_dims * n_steps;
 
   float *decays = (float *) calloc(n_elements, sizeof(float));
@@ -327,7 +327,7 @@ void test_base() {
     impulses[i + 0 * n_dims] = 2.0;
   }
 
-  printf("\n(decays, impulses): ");
+  printf("\nInput (decays, impulses): ");
   for(int i=0; i<n_elements; i++)
   {
     printf("(%f,%f) ", decays[i], impulses[i]);
@@ -357,4 +357,6 @@ void test_base() {
   gpuErrChk(cudaFree(d_decays));
   gpuErrChk(cudaFree(d_impulses));
   gpuErrChk(cudaFree(d_out));
+
+  return out;
 }
