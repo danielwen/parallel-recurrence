@@ -378,8 +378,9 @@ def plr_slr(bs_seq_len_list, alg):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--alg', help="One of {baseline,fast}", type=str)
+    parser.add_argument('--alg', help="One of {baseline,fast}", type=str, require=True)
     parser.add_argument('--num-iters', help="Number of runs to average results over", type=int, default=1)
+    parser.add_argument('--gpuid', help="Which GPU to use", type=int, default=0)
 
     args = parser.parse_args()
     return args 
@@ -389,11 +390,13 @@ if __name__ == "__main__":
     args = parse_args()
 
     import numpy as np
-    seq_len_list = [65536] # [16 ** x for x in range(1, 5)]    
+    seq_len_list = [16 ** x for x in range(1, 5)]    
     num_seqs = len(seq_len_list)
 
     alg_name = args.alg
     num_iters = args.num_iters 
+    gpuid = args.gpuid
+    os.environ['CUDA_VISIBLE_DEVICES'] = str(gpuid)
 
     if alg_name == "baseline":
         alg = Alg.BASELINE
@@ -442,6 +445,7 @@ if __name__ == "__main__":
 
     print("\n\n\n")
     print("AVERAGE (over {} runs) Throughput ratios (P/S) ".format(num_iters), alg_name)
+    print("Seq lens: ", seq_len_list)
     print("LS LSTM", throughputs["p_ls_lstm"] / throughputs["s_ls_lstm"])
     print("SRU: ", throughputs["p_sru"] / throughputs["s_sru"])
     print("QRNN (filter_size=2): ", throughputs["p_2_qrnn"] / throughputs["s_2_qrnn"])

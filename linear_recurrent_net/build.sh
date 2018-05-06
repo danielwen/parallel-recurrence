@@ -1,4 +1,6 @@
 #!/bin/bash
+rm -f correct
+rm -f profile
 rm -rf lib/
 
 DEBUG=0
@@ -31,8 +33,10 @@ g++ -std=c++11 -shared -o lib/tf_linear_recurrence.so tensorflow_binding/linear_
 
 # testing code
 
-if [[ "$TEST" == "1" ]]; then
-	echo -e "\nMaking test_recurrence"
-	g++ -o test_recurrence test_recurrence.cpp lib/linear_recurrence_base.o lib/linear_recurrence_fast.o -L/usr/local/cuda/lib64 -L $CUDA_HOME/lib64 -L $MISC_DIR -lcuda -lcudart 
-	g++ -o profile profile.cpp lib/linear_recurrence_base.o lib/linear_recurrence_fast.o -L/usr/local/cuda/lib64 -L $CUDA_HOME/lib64 -L $MISC_DIR -lcuda -lcudart 
-fi
+g++ -o correct correct.cpp lib/linear_recurrence_base.o lib/linear_recurrence_fast.o -L/usr/local/cuda/lib64 -L $CUDA_HOME/lib64 -L $MISC_DIR -lcuda -lcudart 
+g++ -o profile profile.cpp lib/linear_recurrence_base.o lib/linear_recurrence_fast.o -L/usr/local/cuda/lib64 -L $CUDA_HOME/lib64 -L $MISC_DIR -lcuda -lcudart 
+# if [[ "$TEST" == "1" ]]; then
+# 	echo -e "\nMaking correct and profile"
+# 	g++ -o correct correct.cpp lib/linear_recurrence_base.o lib/linear_recurrence_fast.o -L/usr/local/cuda/lib64 -L $CUDA_HOME/lib64 -L $MISC_DIR -lcuda -lcudart 
+# 	g++ -o profile profile.cpp lib/linear_recurrence_base.o lib/linear_recurrence_fast.o -L/usr/local/cuda/lib64 -L $CUDA_HOME/lib64 -L $MISC_DIR -lcuda -lcudart 
+# fi

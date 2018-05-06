@@ -329,11 +329,11 @@ float* test_base(int n_dims, int n_steps) {
     impulses[i + 0 * n_dims] = 2.0;
   }
 
-  printf("\nInput (decays, impulses): ");
-  for(int i=0; i<n_elements; i++)
-  {
-    printf("(%f,%f) ", decays[i], impulses[i]);
-  }
+  // printf("\nInput (decays, impulses): ");
+  // for(int i=0; i<n_elements; i++)
+  // {
+  //   printf("(%f,%f) ", decays[i], impulses[i]);
+  // }
 
   float *d_impulses;
   gpuErrChk(cudaMalloc(&d_impulses, n_elements * sizeof(float)));
@@ -348,13 +348,6 @@ float* test_base(int n_dims, int n_steps) {
   compute_linear_recurrence_baseline(d_decays, d_impulses, NULL, d_out, n_dims, n_steps);
   gpuErrChk(cudaMemcpy(out, d_out, n_elements * sizeof(float),
 		       cudaMemcpyDeviceToHost));
-
-
-  printf("\nSerial: ");
-  for(int i=0; i<n_elements; i++)
-  {
-    printf("%f ", out[i]);
-  }
 
   gpuErrChk(cudaFree(d_decays));
   gpuErrChk(cudaFree(d_impulses));
