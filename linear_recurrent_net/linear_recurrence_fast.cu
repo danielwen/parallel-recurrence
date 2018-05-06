@@ -115,8 +115,9 @@ __device__ void reduction_fast(float *decays, float *impulses,
     float cum_decay = 1.0;
     float h = 0.0;
     for (int t = 0; t < 32; t++) {
-      cum_decay *= decay_storage[i + t * n_dims];
-      h = decay_storage[i + t * n_dims] * h + h_storage[i + t * n_dims];
+      float curr_decay_stor = decay_storage[i + t * n_dims]
+      cum_decay *= curr_decay_stor;
+      h = curr_decay_stor * h + h_storage[i + t * n_dims];
     }
     decay_storage[i + 32 * n_dims] = cum_decay;
     h_storage[i + 32 * n_dims] = h;
