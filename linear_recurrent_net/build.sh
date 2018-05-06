@@ -30,4 +30,5 @@ g++ -std=c++11 -shared -o lib/tf_linear_recurrence.so tensorflow_binding/linear_
 if [[ "$TEST" == "1" ]]; then
 	echo "\nMaking test_recurrence"
 	g++ -o test_recurrence test_recurrence.cpp lib/linear_recurrence_base.o lib/linear_recurrence_fast.o -L/usr/local/cuda/lib64 -L $CUDA_HOME/lib64 -L $MISC_DIR -lcuda -lcudart 
+	g++ -o profile profile.cpp lib/linear_recurrence_base.o lib/linear_recurrence_fast.o -L/usr/local/cuda/lib64 -L $CUDA_HOME/lib64 -lcuda -lcudart 
 fi

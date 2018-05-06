@@ -30,3 +30,5 @@ void compute_serial_linear_recurrence_baseline(
 float* test_fast(int n_dims, int n_steps);
 float* test_base(int n_dims, int n_steps);
 
+void profile_fast(int n_iters);
+void profile_base(int n_iters);
