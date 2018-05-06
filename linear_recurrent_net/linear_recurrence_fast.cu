@@ -133,49 +133,18 @@ __global__ void block_scan_kernel_fast(float *decay_storage, float *h_storage,
    * from block_idx 0 to i (inclusive) at index (feature_idx, 32, i)
    * This means (feature_idx, 32, 2) contains the reduction of blocks 0, 1, and 2.
    */
-  __shared__ float decay_arrays[SCAN_ARRS_PER_BLK * SCAN_BLOCK_DIM];
-  __shared__ float impulse_arrays[SCAN_ARRS_PER_BLK * SCAN_BLOCK_DIM];
-  __shared__ float decay_scratch[2 * SCAN_ARRS_PER_BLK * SCAN_BLOCK_DIM];
-  __shared__ float impulse_scratch[2 * SCAN_ARRS_PER_BLK * SCAN_BLOCK_DIM];
+  for (int i = threadIdx.x + blockIdx.x * blockDim.x;
+       i < n_dims;
+       i += blockDim.x * gridDim.x) 
+  {
 
-  int n_arrs = min(SCAN_ARRS_PER_BLK, n_dims - blockIdx.x * SCAN_ARRS_PER_BLK);
-  int storage_offset = threadIdx.x * n_dims + blockIdx.x * SCAN_ARRS_PER_BLK;
+    for (int t = 1; t < n_reduced_blocks; t++) {
+      int cur_idx = i + 32 * n_dims + t * 33 * n_dims;
+      int prev_idx = i + 32 * n_dims + (t - 1) * 33 * n_dims;
 
-  // Cooperatively load arrays
-  if (threadIdx.x < n_reduced_blocks) {
-    for (int i = 0; i < n_arrs; i++) {
-      int storage_idx = storage_offset + i;
-      int array_idx = i * SCAN_BLOCK_DIM + threadIdx.x;
-      // int array_idx = storage_idx;
-      decay_arrays[array_idx] = decay_storage[storage_idx];
-      impulse_arrays[array_idx] = h_storage[storage_idx];
-
-      // TODO: remove these 2 lines once code is correct
-      decay_scratch[array_idx] = 0; 
-      impulse_scratch[array_idx] = 0;
-    }
-  }
-
-  __syncthreads();
-
-  // Scan each array
-  for (int which_array = 0; which_array < n_arrs; which_array++) {
-    int array_start = which_array * SCAN_BLOCK_DIM;
-    float *decays_start = &decay_arrays[array_start];
-    float *impulses_start = &impulse_arrays[array_start];
-    sharedMemRecurrentInclusiveScan(threadIdx.x, decays_start, impulses_start,
-      decay_scratch, impulse_scratch, SCAN_BLOCK_DIM);
-  }
-
-  __syncthreads();
-
-  // Cooperatively store arrays
-  if (threadIdx.x < n_reduced_blocks) {
-    for (int i = 0; i < n_arrs; i++) {
-      int storage_idx = storage_offset + i;
-      int array_idx = i * SCAN_BLOCK_DIM + threadIdx.x;
-      decay_storage[storage_idx] = decay_arrays[array_idx];
-      h_storage[storage_idx] = impulse_arrays[array_idx];
+      // TODO: remove unneccessary reads from global memory (prev_idx accesses)
+      h_storage[cur_idx] = decay_storage[cur_idx] * h_storage[prev_idx] + h_storage[cur_idx];
+      decay_storage[cur_idx] *= decay_storage[prev_idx];
     }
   }
 

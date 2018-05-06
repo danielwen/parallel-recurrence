@@ -1,17 +1,21 @@
 #!/bin/bash
 rm -rf lib/
 
-MODE=$1
 DEBUG=0
 TEST=0
 
-if [[ "$MODE" == "DEBUG" ]]; then 
-	echo "Using DEBUG mode";
-	DEBUG=1; 
-fi
-if [[ "$MODE" == "TEST" ]]; then 
-	TEST=1; 
-fi
+# ./build.sh DEBUG TEST 
+for arg in "$@"; do
+	if [[ "$arg" == "DEBUG" ]]; then 
+		echo "Using DEBUG mode";
+		DEBUG=1; 
+	fi
+	if [[ "$arg" == "TEST" ]]; then 
+		echo "Building TEST mode with DEBUG"
+		TEST=1; 
+		DEBUG=1;
+	fi
+done 
 
 mkdir lib
 nvcc -c linear_recurrence_base.cu -o lib/linear_recurrence_base.o -DDEBUG=$DEBUG -O3 --compiler-options '-fPIC' # --device-c
@@ -28,7 +32,7 @@ g++ -std=c++11 -shared -o lib/tf_linear_recurrence.so tensorflow_binding/linear_
 # testing code
 
 if [[ "$TEST" == "1" ]]; then
-	echo "\nMaking test_recurrence"
+	echo -e "\nMaking test_recurrence"
 	g++ -o test_recurrence test_recurrence.cpp lib/linear_recurrence_base.o lib/linear_recurrence_fast.o -L/usr/local/cuda/lib64 -L $CUDA_HOME/lib64 -L $MISC_DIR -lcuda -lcudart 
-	g++ -o profile profile.cpp lib/linear_recurrence_base.o lib/linear_recurrence_fast.o -L/usr/local/cuda/lib64 -L $CUDA_HOME/lib64 -lcuda -lcudart 
+	g++ -o profile profile.cpp lib/linear_recurrence_base.o lib/linear_recurrence_fast.o -L/usr/local/cuda/lib64 -L $CUDA_HOME/lib64 -L $MISC_DIR -lcuda -lcudart 
 fi
