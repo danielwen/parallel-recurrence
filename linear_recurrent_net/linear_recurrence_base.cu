@@ -196,7 +196,7 @@ __global__ void warp_scan_kernel_baseline(float *decays, float *impulses,
     float h = 0.0;
     if (blockIdx.x == 0 && warp == 0) {
       if (initial_state != NULL) {
-	h = initial_state[i];
+	      h = initial_state[i];
       }
     } else {
       h = h_storage[i + (warp - 1) * n_dims + blockIdx.x * 33 * n_dims];

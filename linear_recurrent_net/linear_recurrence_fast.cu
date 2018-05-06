@@ -4,9 +4,7 @@
 #include <cstdlib>
 #include "cycleTimer.h"
 
-#define SCAN_ARRS_PER_BLK 8 
-#define SCAN_BLOCK_DIM 256
-#include "recurrentScan.cu_inl"
+// #include "recurrentScan.cu_inl"
 // #include "linear_recurrence.h"
 // #include "linear_recurrence_h.cuh"
 
@@ -280,9 +278,7 @@ void compute_fast_linear_recurrence(float *decays, float *impulses, float *initi
   #if DEBUG
   double scan_start = CycleTimer::currentSeconds();
   #endif 
-  int n_scan_blocks = (n_dims + SCAN_ARRS_PER_BLK - 1) / SCAN_ARRS_PER_BLK;
-  
-  block_scan_kernel_fast<<<n_scan_blocks, SCAN_BLOCK_DIM>>>(d_decay_storage, d_h_storage,
+  block_scan_kernel_fast<<<n_blocks, 1024>>>(d_decay_storage, d_h_storage,
           n_dims, n_blocks);
   #if DEBUG
   double scan_end = CycleTimer::currentSeconds();
