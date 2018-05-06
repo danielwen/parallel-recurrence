@@ -138,13 +138,19 @@ __global__ void block_scan_kernel_fast(float *decay_storage, float *h_storage,
        i += blockDim.x * gridDim.x) 
   {
 
-    for (int t = 1; t < n_reduced_blocks; t++) {
-      int cur_idx = i + 32 * n_dims + t * 33 * n_dims;
-      int prev_idx = i + 32 * n_dims + (t - 1) * 33 * n_dims;
 
-      // TODO: remove unneccessary reads from global memory (prev_idx accesses)
-      h_storage[cur_idx] = decay_storage[cur_idx] * h_storage[prev_idx] + h_storage[cur_idx];
+    int cur_idx = i + 32 * n_dims;
+    int prev_idx;
+    float prev_h_storage = h_storage[cur_idx];
+
+    for (int t = 1; t < n_reduced_blocks; t++) {
+      prev_idx = cur_idx;
+      cur_idx += 33 * n_dims;
+
+      h_storage[cur_idx] = h_storage[cur_idx] + decay_storage[cur_idx] * prev_h_storage;
       decay_storage[cur_idx] *= decay_storage[prev_idx];
+
+      prev_h_storage = h_storage[cur_idx];
     }
   }
 
