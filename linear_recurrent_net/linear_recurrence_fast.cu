@@ -182,7 +182,7 @@ __global__ void warp_scan_kernel_fast(float *decays, float *impulses,
   for (int i = lane + 32 * warp; i < n_dims; i += blockDim.x) {
 
     int base_idx = blockIdx.x * 33 * n_dims + i;
-    int cur_idx = base_idx + 0 * n_dims;
+    int cur_idx = base_idx + -1 * n_dims;
     int prev_idx;
     float prev_h_stor = h_storage[cur_idx];
 
@@ -193,7 +193,6 @@ __global__ void warp_scan_kernel_fast(float *decays, float *impulses,
         continue;
       }
 
-      // TODO: share cur_dix, prev_idx computations
       prev_idx = cur_idx;
       cur_idx += n_dims;
       float new_h_stor = decay_storage[cur_idx] * prev_h_stor + h_storage[cur_idx];
