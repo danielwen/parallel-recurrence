@@ -356,6 +356,56 @@ float* test_base(int n_dims, int n_steps) {
   return out;
 }
 
+void profile_serial(int n_iters) {
+  srand (static_cast <unsigned> (time(0)));
+
+  int n_steps = 65536;
+  int n_dims = 256;
+  int n_elements = n_dims * n_steps;
+
+  int n_SMs = 13;
+  int n_blocks_per_sm = 2;
+  int n_blocks = min(CEIL_DIV(n_steps, 32), n_SMs * n_blocks_per_sm);
+
+  float *d_decays;
+  cudaMalloc(&d_decays, n_elements * sizeof(float));
+  float *d_impulses;
+  cudaMalloc(&d_impulses, n_elements * sizeof(float));
+  float *d_out;
+  cudaMalloc(&d_out, n_elements * sizeof(float));
+  
+  float *decays = (float *)malloc(n_elements * sizeof(float));
+  float *impulses = (float *)malloc(n_elements * sizeof(float));
+  for (int i = 0; i < n_elements; i++) {
+    decays[i] = -2.0 + static_cast <float> (rand()) / ( static_cast <float> (RAND_MAX / 4.0));
+    impulses[i] = -1.0 + static_cast <float> (rand()) / ( static_cast <float> (RAND_MAX / 2.0));
+  }
+  cudaMemcpy(d_decays, decays,
+    n_elements * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_impulses, impulses,
+    n_elements * sizeof(float), cudaMemcpyHostToDevice);
+
+  printf("SERIAL\n");
+
+  double total_time = 0.0;
+  double total_start;
+
+  for (int i = 0; i < n_iters; i++) {
+    total_start = CycleTimer::currentSeconds();
+    serial_linear_recurrence_baseline<<<n_blocks, 1024>>>(d_decays, d_impulses, NULL,
+      d_out, n_dims, n_steps);
+    cudaThreadSynchronize();
+    total_time += CycleTimer::currentSeconds() - total_start;
+  }
+
+  printf("TOTAL: %.4f s \n", total_time);
+
+  // gpuErrChk(cudaFree(d_reduction_mem));
+  // gpuErrChk(cudaFree(d_decays));
+  // gpuErrChk(cudaFree(d_impulses));
+  // gpuErrChk(cudaFree(d_out));
+}
+
 void profile_base(int n_iters) {
   srand (static_cast <unsigned> (time(0)));
 

@@ -17,9 +17,11 @@ int main(int argc, char** argv)
             profile_base(n_iters);
         } else if (strcmp(alg, "fast") == 0) {
             profile_fast(n_iters);
+        } else if (strcmp(alg, "serial") == 0) {
+            profile_serial(n_iters);
         }
     } else {
-        printf("Usage: ./profile [baseline|fast] <num_iters>\n");
+        printf("Usage: ./profile [baseline|fast|serial] <num_iters>\n");
     }
 	return 0;
 }

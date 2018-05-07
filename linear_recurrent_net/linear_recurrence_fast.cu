@@ -115,7 +115,7 @@ __global__ void reduction_kernel_fast(float *decays, float *impulses,
     float cum_decay = 1.0;
     float h = 0.0;
     for (int t = 0; t < 32; t++) {
-      float curr_decay_stor = decay_storage[i + t * n_dims]
+      float curr_decay_stor = decay_storage[i + t * n_dims];
       cum_decay *= curr_decay_stor;
       h = curr_decay_stor * h + h_storage[i + t * n_dims];
     }

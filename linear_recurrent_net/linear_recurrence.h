@@ -32,3 +32,4 @@ float* test_base(int n_dims, int n_steps);
 
 void profile_fast(int n_iters);
 void profile_base(int n_iters);
+void profile_serial(int n_iters);
