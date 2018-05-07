@@ -63,7 +63,7 @@ __device__ int2 compute_warp_start_stop_fast(int block_idx, int warp_idx,
 
 // decay storage, h_storage:
 //   each a n_dims x 33 x n_blocks matrix on GPU with 33rd column for block reduction
-__device__ void reduction_fast(float *decays, float *impulses,
+__global__ void reduction_kernel_fast(float *decays, float *impulses,
          float *initial_state,
          float *_decay_storage, float *_h_storage,
          int n_dims, int n_steps) {
@@ -124,7 +124,7 @@ __device__ void reduction_fast(float *decays, float *impulses,
   }
 }
 
-__device__ void block_scan_fast(float *decay_storage, float *h_storage,
+__global__ void block_scan_kernel_fast(float *decay_storage, float *h_storage,
           int n_dims, int n_reduced_blocks) {
   /*
    * Scan over blocks.
@@ -155,7 +155,7 @@ __device__ void block_scan_fast(float *decay_storage, float *h_storage,
 
 }
 
-__device__ void warp_scan_fast(float *decays, float *impulses,
+__global__ void warp_scan_kernel_fast(float *decays, float *impulses,
          float *initial_state, float *out,
          float *decay_storage, float *h_storage,
          int n_dims, int n_steps) {
@@ -180,6 +180,12 @@ __device__ void warp_scan_fast(float *decays, float *impulses,
    */
   // TODO: parallel scan
   for (int i = lane + 32 * warp; i < n_dims; i += blockDim.x) {
+
+    int base_idx = blockIdx.x * 33 * n_dims + i;
+    int cur_idx = base_idx + 0 * n_dims;
+    int prev_idx;
+    float prev_h_stor = h_storage[cur_idx];
+
     for (int t = 0; t < 32; t++) {
       if (t == 0 && blockIdx.x == 0) {
         // the reduction over warp 0 (including initial condition) is correct val
@@ -188,10 +194,13 @@ __device__ void warp_scan_fast(float *decays, float *impulses,
       }
 
       // TODO: share cur_dix, prev_idx computations
-      int cur_idx = i + t * n_dims + blockIdx.x * 33 * n_dims;
-      int prev_idx = i + (t - 1) * n_dims + blockIdx.x * 33 * n_dims;
-      h_storage[cur_idx] = decay_storage[cur_idx] * h_storage[prev_idx] + h_storage[cur_idx];
+      prev_idx = cur_idx;
+      cur_idx += n_dims;
+      float new_h_stor = decay_storage[cur_idx] * prev_h_stor + h_storage[cur_idx];
       decay_storage[cur_idx] *= decay_storage[prev_idx];
+
+      h_storage[cur_idx] = new_h_stor;
+      prev_h_stor = new_h_stor;
     }
   }
 
@@ -223,28 +232,6 @@ __device__ void warp_scan_fast(float *decays, float *impulses,
       out[i + t * n_dims] = h;
     }
   }
-}
-
-__global__ void lin_recurr_kernel(float *out,
-         float *decays, float *impulses,
-         float *initial_state,
-         float *d_decay_storage, float *d_h_storage,
-         int n_dims, int n_steps) {
-
-  int n_blocks = gridDim.x;
-
-
-  reduction_fast(decays, impulses, initial_state,
-               d_decay_storage, d_h_storage,
-               n_dims, n_steps);
-
-  block_scan_fast(d_decay_storage, d_h_storage,
-          n_dims, n_blocks);
-
-  warp_scan_fast(decays, impulses,
-               initial_state, out,
-               d_decay_storage, d_h_storage,
-               n_dims, n_steps);
 }
 
 __global__ void test_recurrent_scan() {
@@ -288,25 +275,45 @@ void compute_fast_linear_recurrence(float *decays, float *impulses, float *initi
   float *d_h_storage = &d_reduction_mem[1 * n_blocks * 33 * n_dims];
 
   // TODO: run kernels on non-default stream?
+  #if DEBUG
+  double reduce_start = CycleTimer::currentSeconds();
+  #endif 
+  reduction_kernel_fast<<<n_blocks, 1024>>>(decays, impulses, initial_state,
+               d_decay_storage, d_h_storage,
+               n_dims, n_steps);
+  #if DEBUG
+  double reduce_end = CycleTimer::currentSeconds();
+  #endif 
 
-  lin_recurr_kernel<<<n_blocks, 1024>>>(out, decays, impulses, initial_state,
-                                        d_decay_storage, d_h_storage,
-                                        n_dims, n_steps);
+  #if DEBUG
+  double scan_start = CycleTimer::currentSeconds();
+  #endif 
+  block_scan_kernel_fast<<<n_blocks, 1024>>>(d_decay_storage, d_h_storage,
+          n_dims, n_blocks);
+  #if DEBUG
+  double scan_end = CycleTimer::currentSeconds();
+  #endif 
 
-
-  // reduction_kernel_fast<<<n_blocks, 1024>>>(decays, impulses, initial_state,
-  //              d_decay_storage, d_h_storage,
-  //              n_dims, n_steps);
-
-  // block_scan_kernel_fast<<<n_blocks, 1024>>>(d_decay_storage, d_h_storage,
-  //         n_dims, n_blocks);
-
-  // warp_scan_kernel_fast<<<n_blocks, 1024>>>(decays, impulses,
-  //              initial_state, out,
-  //              d_decay_storage, d_h_storage,
-  //              n_dims, n_steps);
+  #if DEBUG
+  double expand_start = CycleTimer::currentSeconds();
+  #endif 
+  warp_scan_kernel_fast<<<n_blocks, 1024>>>(decays, impulses,
+               initial_state, out,
+               d_decay_storage, d_h_storage,
+               n_dims, n_steps);
+  #if DEBUG
+  double expand_end = CycleTimer::currentSeconds();
+  #endif 
 
   gpuErrChk(cudaFree(d_reduction_mem));
+
+  #if DEBUG
+  printf("FAST\n");
+  printf("Reduce: %.4f ms\n", 1000.f * (reduce_end - reduce_start));
+  printf("Scan: %.4f ms\n", 1000.f * (scan_end - scan_start));
+  printf("Expand: %.4f ms\n", 1000.f * (expand_end - expand_start));
+  printf("\n");
+  #endif
 }
 }
 
@@ -405,32 +412,26 @@ void profile_fast(int n_iters) {
 
   for (int i = 0; i < n_iters; i++) {
 
-    lin_recurr_kernel<<<n_blocks, 1024>>>(d_out, d_decays, d_impulses, NULL,
-                                        d_decay_storage, d_h_storage,
-                                        n_dims, n_steps);
-
+    reduce_start = CycleTimer::currentSeconds();
+    reduction_kernel_fast<<<n_blocks, 1024>>>(d_decays, d_impulses, NULL,
+        d_decay_storage, d_h_storage,
+        n_dims, n_steps);
     cudaThreadSynchronize();
+    reduce_time += CycleTimer::currentSeconds() - reduce_start;
 
-    // reduce_start = CycleTimer::currentSeconds();
-    // reduction_kernel_fast<<<n_blocks, 1024>>>(d_decays, d_impulses, NULL,
-    //     d_decay_storage, d_h_storage,
-    //     n_dims, n_steps);
-    // cudaThreadSynchronize();
-    // reduce_time += CycleTimer::currentSeconds() - reduce_start;
+    scan_start = CycleTimer::currentSeconds();
+    block_scan_kernel_fast<<<n_blocks, 1024>>>(d_decay_storage, d_h_storage,
+      n_dims, n_blocks);
+    cudaThreadSynchronize();
+    scan_time += CycleTimer::currentSeconds() - scan_start;
 
-    // scan_start = CycleTimer::currentSeconds();
-    // block_scan_kernel_fast<<<n_blocks, 1024>>>(d_decay_storage, d_h_storage,
-    //   n_dims, n_blocks);
-    // cudaThreadSynchronize();
-    // scan_time += CycleTimer::currentSeconds() - scan_start;
-
-    // expand_start = CycleTimer::currentSeconds();
-    // warp_scan_kernel_fast<<<n_blocks, 1024>>>(d_decays, d_impulses,
-    //     NULL, d_out,
-    //     d_decay_storage, d_h_storage,
-    //     n_dims, n_steps);
-    // cudaThreadSynchronize();
-    // expand_time += CycleTimer::currentSeconds() - expand_start;
+    expand_start = CycleTimer::currentSeconds();
+    warp_scan_kernel_fast<<<n_blocks, 1024>>>(d_decays, d_impulses,
+        NULL, d_out,
+        d_decay_storage, d_h_storage,
+        n_dims, n_steps);
+    cudaThreadSynchronize();
+    expand_time += CycleTimer::currentSeconds() - expand_start;
 
   }
 
