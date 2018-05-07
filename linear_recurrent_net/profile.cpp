@@ -9,19 +9,17 @@
 
 int main(int argc, char** argv)
 {
-    if (argc == 3) {
+    if (argc == 2) {
         char *alg = argv[1];
-        int n_iters = atoi(argv[2]);
-        printf("%d iterations\n", n_iters);
         if (strcmp(alg, "baseline") == 0) {
-            profile_base(n_iters);
+            profile_base();
         } else if (strcmp(alg, "fast") == 0) {
-            profile_fast(n_iters);
+            profile_fast();
         } else if (strcmp(alg, "serial") == 0) {
-            profile_serial(n_iters);
+            profile_serial();
         }
     } else {
-        printf("Usage: ./profile [baseline|fast|serial] <num_iters>\n");
+        printf("Usage: ./profile [baseline|fast|serial]\n");
     }
 	return 0;
 }

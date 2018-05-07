@@ -217,7 +217,10 @@ __global__ void serial_linear_recurrence_baseline(float *decays, float *impulses
   for (int dim_idx = threadIdx.x + blockIdx.x * blockDim.x;
        dim_idx < n_dims;
        dim_idx += blockDim.x * gridDim.x) {
-    float val = initial_state[dim_idx];
+    float val = 0.0;
+    if (initial_state != NULL) {
+      val = initial_state[dim_idx];
+    }
 
     for (int step = 0; step < n_steps; step++) {
       int idx = dim_idx + step * n_dims;
@@ -263,7 +266,7 @@ void compute_linear_recurrence_baseline(float *decays, float *impulses, float *i
 				       d_decay_storage, d_h_storage,
 				       n_dims, n_steps);
   #if DEBUG
-  double reduce_end = CycleTimer::currentSeconds();
+  double reduce_time = CycleTimer::currentSeconds() - reduce_start;
   #endif
   
   #if DEBUG
@@ -272,7 +275,7 @@ void compute_linear_recurrence_baseline(float *decays, float *impulses, float *i
   block_scan_kernel_baseline<<<n_blocks, 1024>>>(d_decay_storage, d_h_storage,
 					n_dims, n_blocks);
   #if DEBUG
-  double scan_end = CycleTimer::currentSeconds();
+  double scan_time = CycleTimer::currentSeconds() - scan_start;
   #endif
 
   #if DEBUG
@@ -283,16 +286,17 @@ void compute_linear_recurrence_baseline(float *decays, float *impulses, float *i
 				       d_decay_storage, d_h_storage,
 				       n_dims, n_steps);
   #if DEBUG
-  double expand_end = CycleTimer::currentSeconds();
+  double expand_time = CycleTimer::currentSeconds() - expand_start;
   #endif
 
   gpuErrChk(cudaFree(d_reduction_mem));
   
   #if DEBUG
   printf("BASE\n");
-  printf("Reduce: %.4f ms\n", 1000.f * (reduce_end - reduce_start));
-  printf("Scan: %.4f ms\n", 1000.f * (scan_end - scan_start));
-  printf("Expand: %.4f ms\n", 1000.f * (expand_end - expand_start));
+  printf("Reduce: %.4f ms\n", 1000.f * reduce_time);
+  printf("Scan: %.4f ms\n", 1000.f * scan_time);
+  printf("Expand: %.4f ms\n", 1000.f * expand_time);
+  printf("TOTAL: %.4f ms\n", 1000.f * (reduce_time + scan_time + expand_time));
   printf("\n");
   #endif
 }
@@ -305,8 +309,21 @@ void compute_serial_linear_recurrence_baseline(float *decays, float *impulses,
   int n_blocks_per_sm = 2;
 
   int n_blocks = n_SMs * n_blocks_per_sm;
+
+  #if DEBUG
+  double total_start = CycleTimer::currentSeconds();
+  #endif
   serial_linear_recurrence_baseline<<<n_blocks, 1024>>>(decays, impulses, initial_state,
                                                out, n_dims, n_steps);
+  #if DEBUG
+  double total_end = CycleTimer::currentSeconds();
+  #endif
+
+  #if DEBUG
+  printf("SERIAL\n");
+  printf("Total: %.4f ms\n", 1000.f * (total_end - total_start));
+  printf("\n");
+  #endif
 }
 }
 
@@ -356,11 +373,11 @@ float* test_base(int n_dims, int n_steps) {
   return out;
 }
 
-void profile_serial(int n_iters) {
+void profile_serial() {
   srand (static_cast <unsigned> (time(0)));
 
-  int n_steps = 65536;
-  int n_dims = 256;
+  int n_steps = 16777216;
+  int n_dims = 32;
   int n_elements = n_dims * n_steps;
 
   int n_SMs = 13;
@@ -368,11 +385,11 @@ void profile_serial(int n_iters) {
   int n_blocks = min(CEIL_DIV(n_steps, 32), n_SMs * n_blocks_per_sm);
 
   float *d_decays;
-  cudaMalloc(&d_decays, n_elements * sizeof(float));
+  gpuErrChk(cudaMalloc(&d_decays, n_elements * sizeof(float)));
   float *d_impulses;
-  cudaMalloc(&d_impulses, n_elements * sizeof(float));
+  gpuErrChk(cudaMalloc(&d_impulses, n_elements * sizeof(float)));
   float *d_out;
-  cudaMalloc(&d_out, n_elements * sizeof(float));
+  gpuErrChk(cudaMalloc(&d_out, n_elements * sizeof(float)));
   
   float *decays = (float *)malloc(n_elements * sizeof(float));
   float *impulses = (float *)malloc(n_elements * sizeof(float));
@@ -380,37 +397,36 @@ void profile_serial(int n_iters) {
     decays[i] = -2.0 + static_cast <float> (rand()) / ( static_cast <float> (RAND_MAX / 4.0));
     impulses[i] = -1.0 + static_cast <float> (rand()) / ( static_cast <float> (RAND_MAX / 2.0));
   }
-  cudaMemcpy(d_decays, decays,
-    n_elements * sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_impulses, impulses,
-    n_elements * sizeof(float), cudaMemcpyHostToDevice);
+  gpuErrChk(cudaMemcpy(d_decays, decays,
+    n_elements * sizeof(float), cudaMemcpyHostToDevice));
+  gpuErrChk(cudaMemcpy(d_impulses, impulses,
+    n_elements * sizeof(float), cudaMemcpyHostToDevice));
 
   printf("SERIAL\n");
 
-  double total_time = 0.0;
-  double total_start;
+  // double total_time = 0.0;
+  // double total_start;
 
-  for (int i = 0; i < n_iters; i++) {
-    total_start = CycleTimer::currentSeconds();
-    serial_linear_recurrence_baseline<<<n_blocks, 1024>>>(d_decays, d_impulses, NULL,
-      d_out, n_dims, n_steps);
-    cudaThreadSynchronize();
-    total_time += CycleTimer::currentSeconds() - total_start;
-  }
+  // for (int i = 0; i < n_iters; i++) {
+    // total_start = CycleTimer::currentSeconds();
+  serial_linear_recurrence_baseline<<<n_blocks, 1024>>>(d_decays, d_impulses, NULL,
+    d_out, n_dims, n_steps);
+    // cudaDeviceSynchronize();
+    // total_time += CycleTimer::currentSeconds() - total_start;
+  // }
 
-  printf("TOTAL: %.4f s \n", total_time);
+  // printf("TOTAL: %.4f s \n", total_time);
 
-  // gpuErrChk(cudaFree(d_reduction_mem));
-  // gpuErrChk(cudaFree(d_decays));
-  // gpuErrChk(cudaFree(d_impulses));
-  // gpuErrChk(cudaFree(d_out));
+  gpuErrChk(cudaFree(d_decays));
+  gpuErrChk(cudaFree(d_impulses));
+  gpuErrChk(cudaFree(d_out));
 }
 
-void profile_base(int n_iters) {
+void profile_base() {
   srand (static_cast <unsigned> (time(0)));
 
-  int n_steps = 65536;
-  int n_dims = 256;
+  int n_steps = 16777216;
+  int n_dims = 32;
   int n_elements = n_dims * n_steps;
 
   int n_SMs = 13;
@@ -419,11 +435,11 @@ void profile_base(int n_iters) {
   int reduction_mem_sz = 2 * n_blocks * 33 * n_dims * sizeof(float);
 
   float *d_decays;
-  cudaMalloc(&d_decays, n_elements * sizeof(float));
+  gpuErrChk(cudaMalloc(&d_decays, n_elements * sizeof(float)));
   float *d_impulses;
-  cudaMalloc(&d_impulses, n_elements * sizeof(float));
+  gpuErrChk(cudaMalloc(&d_impulses, n_elements * sizeof(float)));
   float *d_out;
-  cudaMalloc(&d_out, n_elements * sizeof(float));
+  gpuErrChk(cudaMalloc(&d_out, n_elements * sizeof(float)));
   
   float *decays = (float *)malloc(n_elements * sizeof(float));
   float *impulses = (float *)malloc(n_elements * sizeof(float));
@@ -431,62 +447,62 @@ void profile_base(int n_iters) {
     decays[i] = -2.0 + static_cast <float> (rand()) / ( static_cast <float> (RAND_MAX / 4.0));
     impulses[i] = -1.0 + static_cast <float> (rand()) / ( static_cast <float> (RAND_MAX / 2.0));
   }
-  cudaMemcpy(d_decays, decays,
-    n_elements * sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_impulses, impulses,
-    n_elements * sizeof(float), cudaMemcpyHostToDevice);
+  gpuErrChk(cudaMemcpy(d_decays, decays,
+    n_elements * sizeof(float), cudaMemcpyHostToDevice));
+  gpuErrChk(cudaMemcpy(d_impulses, impulses,
+    n_elements * sizeof(float), cudaMemcpyHostToDevice));
 
   float *d_reduction_mem;
-  cudaMalloc(&d_reduction_mem, reduction_mem_sz);
+  gpuErrChk(cudaMalloc(&d_reduction_mem, reduction_mem_sz));
   float *d_decay_storage = &d_reduction_mem[0 * n_blocks * 33 * n_dims];
   float *d_h_storage = &d_reduction_mem[1 * n_blocks * 33 * n_dims];
 
-  double reduce_time = 0.f;
-  double scan_time = 0.f;
-  double expand_time = 0.f;
+  // double reduce_time = 0.f;
+  // double scan_time = 0.f;
+  // double expand_time = 0.f;
 
   printf("BASE\n");
 
-  double reduce_start;
-  double scan_start;
-  double expand_start;
+  // double reduce_start;
+  // double scan_start;
+  // double expand_start;
 
-  double total_start = CycleTimer::currentSeconds();
+  // double total_start = CycleTimer::currentSeconds();
 
-  for (int i = 0; i < n_iters; i++) {
+  // for (int i = 0; i < n_iters; i++) {
 
-    reduce_start = CycleTimer::currentSeconds();
-    reduction_kernel_baseline<<<n_blocks, 1024>>>(d_decays, d_impulses, NULL,
-        d_decay_storage, d_h_storage,
-        n_dims, n_steps);
-    cudaThreadSynchronize();
-    reduce_time += CycleTimer::currentSeconds() - reduce_start;
+  // reduce_start = CycleTimer::currentSeconds();
+  reduction_kernel_baseline<<<n_blocks, 1024>>>(d_decays, d_impulses, NULL,
+      d_decay_storage, d_h_storage,
+      n_dims, n_steps);
+  // cudaDeviceSynchronize();
+  // reduce_time += CycleTimer::currentSeconds() - reduce_start;
 
-    scan_start = CycleTimer::currentSeconds();
-    block_scan_kernel_baseline<<<n_blocks, 1024>>>(d_decay_storage, d_h_storage,
-      n_dims, n_blocks);
-    cudaThreadSynchronize();
-    scan_time += CycleTimer::currentSeconds() - scan_start;
+  // scan_start = CycleTimer::currentSeconds();
+  block_scan_kernel_baseline<<<n_blocks, 1024>>>(d_decay_storage, d_h_storage,
+    n_dims, n_blocks);
+  // cudaDeviceSynchronize();
+  // scan_time += CycleTimer::currentSeconds() - scan_start;
 
-    expand_start = CycleTimer::currentSeconds();
-    warp_scan_kernel_baseline<<<n_blocks, 1024>>>(d_decays, d_impulses,
-        NULL, d_out,
-        d_decay_storage, d_h_storage,
-        n_dims, n_steps);
-    cudaThreadSynchronize();
-    expand_time += CycleTimer::currentSeconds() - expand_start;
+  // expand_start = CycleTimer::currentSeconds();
+  warp_scan_kernel_baseline<<<n_blocks, 1024>>>(d_decays, d_impulses,
+      NULL, d_out,
+      d_decay_storage, d_h_storage,
+      n_dims, n_steps);
+  // cudaDeviceSynchronize();
+  // expand_time += CycleTimer::currentSeconds() - expand_start;
 
-  }
+  // }
 
-  double total_time = CycleTimer::currentSeconds() - total_start;
-  double sum_time = reduce_time + scan_time + expand_time;
-  printf("Reduce: %.4f s (%.3f)\n", reduce_time, reduce_time / sum_time);
-  printf("Scan: %.4f s (%.3f)\n", scan_time, scan_time / sum_time);
-  printf("Expand: %.4f s (%.3f)\n", expand_time, expand_time / sum_time);
-  printf("TOTAL: %.4f s \n", total_time);
+  // double total_time = CycleTimer::currentSeconds() - total_start;
+  // double sum_time = reduce_time + scan_time + expand_time;
+  // printf("Reduce: %.4f s (%.3f)\n", reduce_time, reduce_time / sum_time);
+  // printf("Scan: %.4f s (%.3f)\n", scan_time, scan_time / sum_time);
+  // printf("Expand: %.4f s (%.3f)\n", expand_time, expand_time / sum_time);
+  // printf("TOTAL: %.4f s \n", total_time);
 
-  // gpuErrChk(cudaFree(d_reduction_mem));
-  // gpuErrChk(cudaFree(d_decays));
-  // gpuErrChk(cudaFree(d_impulses));
-  // gpuErrChk(cudaFree(d_out));
+  gpuErrChk(cudaFree(d_reduction_mem));
+  gpuErrChk(cudaFree(d_decays));
+  gpuErrChk(cudaFree(d_impulses));
+  gpuErrChk(cudaFree(d_out));
 }

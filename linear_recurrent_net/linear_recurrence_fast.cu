@@ -362,11 +362,11 @@ float* test_fast(int n_dims, int n_steps) {
   return out_fast;
 }
 
-void profile_fast(int n_iters) {
+void profile_fast() {
   srand (static_cast <unsigned> (time(0)));
 
-  int n_steps = 65536;
-  int n_dims = 256;
+  int n_steps = 16777216;
+  int n_dims = 32;
   int n_elements = n_dims * n_steps;
 
   int n_SMs = 13;
@@ -375,11 +375,11 @@ void profile_fast(int n_iters) {
   int reduction_mem_sz = 2 * n_blocks * 33 * n_dims * sizeof(float);
 
   float *d_decays;
-  cudaMalloc(&d_decays, n_elements * sizeof(float));
+  gpuErrChk(cudaMalloc(&d_decays, n_elements * sizeof(float)));
   float *d_impulses;
-  cudaMalloc(&d_impulses, n_elements * sizeof(float));
+  gpuErrChk(cudaMalloc(&d_impulses, n_elements * sizeof(float)));
   float *d_out;
-  cudaMalloc(&d_out, n_elements * sizeof(float));
+  gpuErrChk(cudaMalloc(&d_out, n_elements * sizeof(float)));
   
   float *decays = (float *)malloc(n_elements * sizeof(float));
   float *impulses = (float *)malloc(n_elements * sizeof(float));
@@ -387,62 +387,62 @@ void profile_fast(int n_iters) {
     decays[i] = -2.0 + static_cast <float> (rand()) / ( static_cast <float> (RAND_MAX / 4.0));
     impulses[i] = -1.0 + static_cast <float> (rand()) / ( static_cast <float> (RAND_MAX / 2.0));
   }
-  cudaMemcpy(d_decays, decays,
-    n_elements * sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_impulses, impulses,
-    n_elements * sizeof(float), cudaMemcpyHostToDevice);
+  gpuErrChk(cudaMemcpy(d_decays, decays,
+    n_elements * sizeof(float), cudaMemcpyHostToDevice));
+  gpuErrChk(cudaMemcpy(d_impulses, impulses,
+    n_elements * sizeof(float), cudaMemcpyHostToDevice));
 
   float *d_reduction_mem;
-  cudaMalloc(&d_reduction_mem, reduction_mem_sz);
+  gpuErrChk(cudaMalloc(&d_reduction_mem, reduction_mem_sz));
   float *d_decay_storage = &d_reduction_mem[0 * n_blocks * 33 * n_dims];
   float *d_h_storage = &d_reduction_mem[1 * n_blocks * 33 * n_dims];
 
-  double reduce_time = 0.f;
-  double scan_time = 0.f;
-  double expand_time = 0.f;
+  // double reduce_time = 0.f;
+  // double scan_time = 0.f;
+  // double expand_time = 0.f;
 
   printf("FAST\n");
 
-  double reduce_start;
-  double scan_start;
-  double expand_start;
+  // double reduce_start;
+  // double scan_start;
+  // double expand_start;
 
-  double total_start = CycleTimer::currentSeconds();
+  // double total_start = CycleTimer::currentSeconds();
 
-  for (int i = 0; i < n_iters; i++) {
+  // for (int i = 0; i < n_iters; i++) {
 
-    reduce_start = CycleTimer::currentSeconds();
-    reduction_kernel_fast<<<n_blocks, 1024>>>(d_decays, d_impulses, NULL,
-        d_decay_storage, d_h_storage,
-        n_dims, n_steps);
-    cudaThreadSynchronize();
-    reduce_time += CycleTimer::currentSeconds() - reduce_start;
+  // reduce_start = CycleTimer::currentSeconds();
+  reduction_kernel_fast<<<n_blocks, 1024>>>(d_decays, d_impulses, NULL,
+      d_decay_storage, d_h_storage,
+      n_dims, n_steps);
+  // cudaThreadSynchronize();
+  // reduce_time += CycleTimer::currentSeconds() - reduce_start;
 
-    scan_start = CycleTimer::currentSeconds();
-    block_scan_kernel_fast<<<n_blocks, 1024>>>(d_decay_storage, d_h_storage,
-      n_dims, n_blocks);
-    cudaThreadSynchronize();
-    scan_time += CycleTimer::currentSeconds() - scan_start;
+  // scan_start = CycleTimer::currentSeconds();
+  block_scan_kernel_fast<<<n_blocks, 1024>>>(d_decay_storage, d_h_storage,
+    n_dims, n_blocks);
+  // cudaThreadSynchronize();
+  // scan_time += CycleTimer::currentSeconds() - scan_start;
 
-    expand_start = CycleTimer::currentSeconds();
-    warp_scan_kernel_fast<<<n_blocks, 1024>>>(d_decays, d_impulses,
-        NULL, d_out,
-        d_decay_storage, d_h_storage,
-        n_dims, n_steps);
-    cudaThreadSynchronize();
-    expand_time += CycleTimer::currentSeconds() - expand_start;
+  // expand_start = CycleTimer::currentSeconds();
+  warp_scan_kernel_fast<<<n_blocks, 1024>>>(d_decays, d_impulses,
+      NULL, d_out,
+      d_decay_storage, d_h_storage,
+      n_dims, n_steps);
+  // cudaThreadSynchronize();
+  // expand_time += CycleTimer::currentSeconds() - expand_start;
 
-  }
+  // }
 
-  double total_time = CycleTimer::currentSeconds() - total_start;
-  double sum_time = reduce_time + scan_time + expand_time;
-  printf("Reduce: %.4f s (%.3f)\n", reduce_time, reduce_time / sum_time);
-  printf("Scan: %.4f s (%.3f)\n", scan_time, scan_time / sum_time);
-  printf("Expand: %.4f s (%.3f)\n", expand_time, expand_time / sum_time);
-  printf("TOTAL: %.4f s \n", total_time);
+  // double total_time = CycleTimer::currentSeconds() - total_start;
+  // double sum_time = reduce_time + scan_time + expand_time;
+  // printf("Reduce: %.4f s (%.3f)\n", reduce_time, reduce_time / sum_time);
+  // printf("Scan: %.4f s (%.3f)\n", scan_time, scan_time / sum_time);
+  // printf("Expand: %.4f s (%.3f)\n", expand_time, expand_time / sum_time);
+  // printf("TOTAL: %.4f s \n", total_time);
 
-  // gpuErrChk(cudaFree(d_reduction_mem));
-  // gpuErrChk(cudaFree(d_decays));
-  // gpuErrChk(cudaFree(d_impulses));
-  // gpuErrChk(cudaFree(d_out));
+  gpuErrChk(cudaFree(d_reduction_mem));
+  gpuErrChk(cudaFree(d_decays));
+  gpuErrChk(cudaFree(d_impulses));
+  gpuErrChk(cudaFree(d_out));
 }
